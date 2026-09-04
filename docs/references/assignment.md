@@ -1,0 +1,2 @@
+See You in the Cosmos Adaptation
+In this project you'll design and build a video game that adapts a theme from See You in the Cosmos into a playable mechanic — and you'll do it using an AI-native workflow: Plan → Setup → Build. This is the lead document for the module; each class day below links to its own page with the full assignment details.
