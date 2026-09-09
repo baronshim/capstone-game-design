@@ -17,7 +17,9 @@ npm run dev        # builds the client, serves on http://localhost:8787 (LAN: --
 ```
 
 Open the URL on two devices, create a room on one, join with the code on
-the other.
+the other. The room URL includes `?room=CODE` and can be shared or reloaded
+to rejoin the same seat. A room with nobody connected for 10 minutes deletes
+itself.
 
 ## Check
 
@@ -26,6 +28,8 @@ npm test           # unit tests for src/game
 npm run typecheck  # worker + client
 npm run smoke      # end-to-end against a running `npm run dev`
 ```
+
+The smoke script needs Node 22 or newer (global WebSocket).
 
 ## Deploy
 

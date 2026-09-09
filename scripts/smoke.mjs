@@ -77,8 +77,9 @@ late.send({ type: 'join', playerId: late.id, displayName: 'Late' });
 const refused = await late.next((m) => m.type === 'error');
 assert.equal(refused.code, 'room-started');
 
-// Unknown room gets a readable error.
-const ghost = new WebSocket(`${WS_BASE}/rooms/ZZZZ/ws`);
+// Unknown room gets a readable error. Rotate the real code so we can't collide with it.
+const ghostCode = [...code].map((c) => String.fromCharCode(65 + ((c.charCodeAt(0) - 65 + 1) % 26))).join('');
+const ghost = new WebSocket(`${WS_BASE}/rooms/${ghostCode}/ws`);
 const ghostMsg = await new Promise((resolve, reject) => {
   ghost.onmessage = (ev) => resolve(JSON.parse(ev.data));
   ghost.onerror = () => reject(new Error('ghost socket error'));

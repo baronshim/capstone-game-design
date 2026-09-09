@@ -2,6 +2,7 @@
   "name": "imposter-turing",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=22" },
   "scripts": {
     "build:client": "esbuild src/client/app.ts --bundle --format=esm --outfile=public/app.js",
     "dev": "npm run build:client && wrangler dev --ip 0.0.0.0",

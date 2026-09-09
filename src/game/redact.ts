@@ -3,7 +3,8 @@ import type { SeatView, Snapshot } from './protocol';
 
 /**
  * The only path from room state to a client. Strips everything a viewer
- * must not know about other seats. Bots and humans look identical after start.
+ * must not know about other seats. After start, other seats expose only
+ * alias and connection state.
  */
 export function redact(state: RoomState, viewerPlayerId: string | null): Snapshot {
   const you = viewerPlayerId === null ? undefined : state.seats.find((s) => s.playerId === viewerPlayerId);
