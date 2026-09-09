@@ -31,6 +31,10 @@ function connect(code: string): void {
     showError('Room codes are 4 letters');
     return;
   }
+  if (socket) {
+    socket.onclose = null;
+    socket.close();
+  }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   socket = new WebSocket(`${proto}://${location.host}/rooms/${roomCode}/ws`);
   socket.onopen = () => send({ type: 'join', playerId: getPlayerId(), displayName: $<HTMLInputElement>('name').value });
@@ -62,7 +66,10 @@ function nameOf(seat: number): string {
 }
 
 function esc(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+  );
 }
 
 function render(): void {
