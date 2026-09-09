@@ -13,6 +13,14 @@ describe('makeAliases', () => {
     expect(makeAliases(6, seededRng(7))).toEqual(makeAliases(6, seededRng(7)));
     expect(makeAliases(6, seededRng(7))).not.toEqual(makeAliases(6, seededRng(8)));
   });
+
+  it('gives every alias in a round a distinct color and a distinct animal', () => {
+    const aliases = makeAliases(6, seededRng(5));
+    const colors = new Set(aliases.map((a) => a.split(' ')[0]));
+    const animals = new Set(aliases.map((a) => a.split(' ')[1]));
+    expect(colors.size).toBe(6);
+    expect(animals.size).toBe(6);
+  });
 });
 
 describe('shuffle', () => {

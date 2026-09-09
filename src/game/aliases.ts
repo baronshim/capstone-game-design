@@ -13,9 +13,10 @@ export function shuffle<T>(items: T[], rng: Rng): T[] {
 }
 
 export function makeAliases(count: number, rng: Rng): string[] {
-  const pool: string[] = [];
-  for (const color of COLORS) for (const animal of ANIMALS) pool.push(`${color} ${animal}`);
-  return shuffle(pool, rng).slice(0, count);
+  if (count > 10) throw new RangeError('makeAliases supports at most 10 aliases');
+  const colors = shuffle([...COLORS], rng);
+  const animals = shuffle([...ANIMALS], rng);
+  return colors.slice(0, count).map((color, i) => `${color} ${animals[i]}`);
 }
 
 /** mulberry32: small deterministic PRNG for tests and reproducible rounds. */
