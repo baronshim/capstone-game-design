@@ -3,6 +3,7 @@ import { makeAliases, shuffle, type Rng } from './aliases';
 
 export const SEAT_COUNT = 6;
 export const MAX_CHAT_LENGTH = 280;
+export const MAX_TRANSCRIPT = 200;
 const MAX_NAME_LENGTH = 20;
 
 export interface Seat {
@@ -95,7 +96,7 @@ function chat(state: RoomState, event: Extract<Event, { type: 'chat' }>): Result
   const text = event.text.trim().slice(0, MAX_CHAT_LENGTH);
   if (!text) return ok(state);
   const line: ChatLine = { seat: seat.index, text, at: event.at };
-  return ok({ ...state, transcript: [...state.transcript, line] });
+  return ok({ ...state, transcript: [...state.transcript, line].slice(-MAX_TRANSCRIPT) });
 }
 
 function start(state: RoomState, event: Extract<Event, { type: 'start' }>, rng: Rng): Result {

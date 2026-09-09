@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { apply, createRoom, SEAT_COUNT, type RoomState } from '../../src/game/state';
+import { apply, createRoom, MAX_TRANSCRIPT, SEAT_COUNT, type RoomState } from '../../src/game/state';
 import { seededRng } from '../../src/game/aliases';
 
 const rng = () => seededRng(42);
@@ -79,6 +79,15 @@ describe('chat', () => {
     const result = apply(state, { type: 'chat', playerId: 'ghost', text: 'boo', at: 5 });
     expect(result.effects[0].code).toBe('not-seated');
     expect(result.state.transcript).toEqual([]);
+  });
+
+  it('caps the transcript at MAX_TRANSCRIPT lines, dropping the oldest', () => {
+    let state = roomWith(['Ada']);
+    for (let i = 0; i < 201; i++) {
+      state = apply(state, { type: 'chat', playerId: 'p0', text: `msg ${i}`, at: i }).state;
+    }
+    expect(state.transcript).toHaveLength(MAX_TRANSCRIPT);
+    expect(state.transcript[0].text).toBe('msg 1');
   });
 });
 

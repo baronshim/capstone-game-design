@@ -53,13 +53,18 @@ export class RoomObject extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== 'string' || !this.state) return;
 
-    let msg: ClientMessage;
+    let parsed: unknown;
     try {
-      msg = JSON.parse(raw) as ClientMessage;
+      parsed = JSON.parse(raw);
     } catch {
       this.send(ws, { type: 'error', code: 'bad-json', message: 'Malformed message' });
       return;
     }
+    if (parsed === null || typeof parsed !== 'object') {
+      this.send(ws, { type: 'error', code: 'bad-json', message: 'Malformed message' });
+      return;
+    }
+    const msg = parsed as ClientMessage;
 
     const att = ws.deserializeAttachment() as Attachment;
     let event: Event;
@@ -128,6 +133,8 @@ export class RoomObject extends DurableObject<Env> {
           this.send(ws, { type: 'error', code: effect.code, message: effect.message });
         }
       }
+      const seated = att.playerId !== null && this.state.seats.some((s) => s.playerId === att.playerId);
+      if (!seated) continue;
       this.send(ws, { type: 'state', snapshot: redact(this.state, att.playerId) });
     }
   }
