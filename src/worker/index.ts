@@ -18,14 +18,19 @@ export default {
     const parts = url.pathname.split('/').filter(Boolean);
 
     if (parts[0] === 'rooms' && parts.length === 1 && request.method === 'POST') {
-      const code = newCode();
-      const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-      await stub.fetch(new Request(`${url.origin}/create?code=${code}`, { method: 'POST' }));
-      return Response.json({ code });
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const code = newCode();
+        const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+        const res = await stub.fetch(new Request(`${url.origin}/create?code=${code}`, { method: 'POST' }));
+        const { created } = (await res.json()) as { created: boolean };
+        if (created) return Response.json({ code });
+      }
+      return new Response('Could not allocate a room code', { status: 503 });
     }
 
     if (parts[0] === 'rooms' && parts.length === 3 && parts[2] === 'ws') {
       const code = parts[1].toUpperCase();
+      if (!/^[A-Z]{4}$/.test(code)) return new Response('Not found', { status: 404 });
       const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
       return stub.fetch(request);
     }

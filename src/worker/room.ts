@@ -24,12 +24,13 @@ export class RoomObject extends DurableObject<Env> {
     const url = new URL(request.url);
 
     if (url.pathname === '/create' && request.method === 'POST') {
+      const created = !this.state;
       if (!this.state) {
         this.state = createRoom(url.searchParams.get('code') ?? '????', Date.now());
         await this.save();
       }
       await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
-      return Response.json({ ok: true });
+      return Response.json({ created });
     }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
