@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Imposter Turing</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; display: flex; justify-content: center; }
+    main { width: 100%; max-width: 480px; padding: 16px; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    input, button { font: inherit; padding: 8px 12px; }
+    label { display: block; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .row input { flex: 1; min-width: 0; }
+    #seats { margin: 8px 0; }
+    .seat { padding: 4px 0; }
+    .seat.off { opacity: 0.5; }
+    #log { height: 50vh; overflow-y: auto; border: 1px solid #8884; padding: 8px; margin: 8px 0; }
+    .line { margin: 4px 0; overflow-wrap: anywhere; }
+    .line b { margin-right: 6px; }
+    .error { color: #c33; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="home">
+      <h1>Imposter Turing</h1>
+      <label>Your name <input id="name" maxlength="20" autocomplete="nickname"></label>
+      <div class="row"><button id="create">Create room</button></div>
+      <div class="row">
+        <input id="code" placeholder="Room code" maxlength="4" autocapitalize="characters">
+        <button id="join">Join</button>
+      </div>
+    </section>
+
+    <section id="room" hidden>
+      <h2>Room <span id="room-code"></span> <small id="phase"></small></h2>
+      <div id="seats"></div>
+      <button id="start">Start</button>
+      <div id="log"></div>
+      <form id="composer" class="row">
+        <input id="text" maxlength="280" autocomplete="off" placeholder="Say something">
+        <button>Send</button>
+      </form>
+    </section>
+
+    <p id="error" class="error"></p>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
