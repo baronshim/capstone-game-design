@@ -117,7 +117,8 @@ src/
   worker/
     index.ts      Worker entry: static assets, POST /rooms, GET /rooms/:code (WS upgrade)
     room.ts       Room Durable Object: sockets, alarms, calls the reducer, triggers bots
-    bots.ts       Bot scheduling, Anthropic calls, fallbacks, budget guard
+    bots.ts       Bot scheduling, BotBackend dispatch, output validation, budget guard
+    backends/     BotBackend implementations: fake, workersAi, scripted
     prompts.ts    Prompt builders and output schemas for each bot action
   game/
     state.ts      GameState types and reducer: apply(state, event) -> { state, effects }
@@ -146,8 +147,12 @@ Cloudflare and lets bots be tested with a fake API.
 is fed back into the reducer exactly as a client message would be.
 
 **Deployment.** `wrangler dev` locally (LAN access for the class demo),
-`wrangler deploy` to a free `*.workers.dev` URL. `ANTHROPIC_API_KEY` is a
-Worker secret. Environment flag `BOT_MODE=fake|live` (default `fake`).
+`wrangler deploy` to a free `*.workers.dev` URL. Bots run on Cloudflare
+Workers AI through the `env.AI` binding declared in `wrangler.toml`, so
+the deployment holds no API key or secret of any kind. Environment flags:
+`BOT_MODE=fake|live` (default `fake`) and `BOT_MODEL` (default
+`@cf/google/gemma-4-26b-it`, or whatever the current Workers AI catalog
+name for Gemma 4 26B is at implementation time).
 
 ## 4. Protocol and state
 
@@ -192,8 +197,13 @@ advances. Bot chat ticks and question-answer deadlines use short alarms.
 
 ### 4.5 Failure handling
 
-- Anthropic call fails or exceeds 5s: bot skips that action. For clues the
-  bot submits a word from a per-category fallback list.
+- Model call fails, exceeds 5s, or returns output that fails validation:
+  the scripted backend handles that action. For clues it submits a word
+  from a per-category fallback list; for chat it stays silent; for votes
+  it uses the rule-based vote below.
+- Daily Workers AI allocation exhausted (calls start failing with a quota
+  error): the room switches to the scripted backend for the rest of the
+  day and the lobby shows "bots are on autopilot today".
 - Human disconnects mid-round: seat stays, marked disconnected, timeouts
   handle their turns. No bot replacement mid-round.
 - No humans connected for 10 minutes: room deletes itself.
@@ -212,7 +222,11 @@ punctuation, length), mood, a hobby or two for small talk, and a secret
 
 ### 5.2 Actions and schemas
 
-Each bot action is a single Anthropic Messages call with structured output.
+Each bot action is a single call through the `BotBackend` interface
+(`run(action, inputs) -> output | null`). The live backend makes one
+Workers AI call with a JSON schema response format. Every output is
+validated server-side before it becomes an event (see 5.7); anything that
+fails validation is treated as a failed call.
 
 | Action | Inputs | Output |
 |---|---|---|
@@ -249,10 +263,48 @@ proportional to its length so replies do not land instantly.
 
 ### 5.6 Model settings
 
-Default model `claude-opus-5` with adaptive thinking and `effort: low` for
-latency, small `max_tokens`, structured output via `output_config.format`.
-Model is configurable by env var. `BOT_MODE=fake` returns canned outputs for
-development and tests.
+Bots use Cloudflare Workers AI via the `env.AI` binding. Chosen 2026-09-09
+over an Anthropic key because it is free (10,000 neurons per day on the
+Workers Free plan), needs no secret on the public Worker, and cannot run up
+a bill: past the daily allocation calls fail and the scripted backend takes
+over.
+
+Default model is Gemma 4 26B, about 15 neurons per bot call at roughly
+1,500 input and 40 output tokens, so around 650 calls or 20 to 30 full
+rounds per day. `BOT_MODEL` overrides it. Each call uses the JSON schema
+response format, a `max_tokens` of 80, and a temperature around 0.8 for
+chat and 0.3 for votes and clues.
+
+Three `BotBackend` implementations, selected by `BOT_MODE`:
+
+- `fake`: canned outputs for development and tests (default).
+- `live`: Workers AI, falling back to `scripted` per action on failure.
+- `scripted`: no model. Clue from the fallback list, silence in chat, no
+  questions, rule-based vote (4.5), steal guess from clues by category.
+
+The backend interface is the only place a model is named, so swapping in a
+hosted API later (for example Claude with a Worker secret) is a one-file
+change and a new `BOT_MODE` value.
+
+### 5.7 Output validation and injection guard
+
+Prompt injection through free chat is treated as a given, not something
+the prompt prevents. Bots have no tools and hold only two secrets, their
+role and the word, so the guard is structural:
+
+- Every model output is parsed against the action's JSON schema and each
+  field is checked against game state: a clue is a single word not equal
+  to the secret word; a vote or question target is a live non-self seat;
+  a question id is on the menu; a chat line is at most 140 characters.
+- Any chat line or clue containing the secret word (case-insensitive,
+  including the plural and obvious spelling variants) is dropped and the
+  bot stays silent for that turn.
+- Transcript text is passed to the model inside a clearly delimited data
+  block with the instruction that it is player chat, not instructions.
+- The per-round call budget (4.5) caps how much a room can spend of the
+  daily allocation no matter what players type.
+
+A failed check counts as a failed call and routes to the scripted backend.
 
 ## 6. Client
 
@@ -276,6 +328,9 @@ Plain TypeScript and HTML, mobile-first single column. Views:
   scoring, redaction leak checklist, timeout transitions.
 - Prompt builders with fake bot mode: schemas validate, style sheet math,
   fallbacks on failure and budget.
+- Output validation (5.7): secret-word leak filter, invalid seats and
+  question ids rejected, oversize chat lines rejected, each failure routes
+  to the scripted backend.
 - Integration: a scripted full round in the Worker test harness with fake
   bots and 1 human, and with 2 humans.
 
@@ -287,8 +342,9 @@ Each milestone ends in a playable build tagged `m1` through `m4`.
    devices, aliases, live chat, redacted snapshots, reconnect.
 2. **Week 2, Imposter round.** Word lists, imposter assignment, clue phase
    with timers, vote, steal, reveal. No bots, no Knight/Knave.
-3. **Week 3, bots.** Bot seats fill the room, fake mode then live calls for
-   clue, chat, ask, vote, steal. Mimicry style sheet. Bot-call phase and
+3. **Week 3, bots.** Bot seats fill the room, fake mode then Workers AI
+   calls for clue, chat, ask, vote, steal, with the scripted backend as
+   fallback. Output validation. Mimicry style sheet. Bot-call phase and
    scoring. Deploy to `workers.dev`.
 4. **Week 4, Knights and Knaves plus polish.** Roles, question menu,
    enforced Yes/No answers, timeout auto-answers, reveal shows roles. Then
@@ -303,7 +359,9 @@ mistaken for bots, voice, art beyond a clean text UI.
 
 Captured for later: the annotated replay reveal (interrogation log marked
 with forced lies and which human each bot was mimicking) is the strongest
-theme payoff and is the first stretch feature after m4.
+theme payoff and is the first stretch feature after m4. Second stretch:
+a LoRA adapter on the Workers AI model, fine-tuned on human chat lines
+collected from playtests, to improve mimicry beyond the style sheet.
 
 ## 10. Success test
 
