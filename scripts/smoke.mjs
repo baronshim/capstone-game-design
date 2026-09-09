@@ -16,6 +16,7 @@ function client(name, id = crypto.randomUUID()) {
   const open = new Promise((resolve, reject) => {
     ws.onopen = resolve;
     ws.onerror = () => reject(new Error(`${name}: socket error`));
+    setTimeout(() => reject(new Error(`${name}: timed out opening socket`)), 3000);
   });
   const send = (m) => ws.send(JSON.stringify(m));
   const next = async (pred, ms = 3000) => {
