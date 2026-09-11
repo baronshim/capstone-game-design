@@ -930,10 +930,13 @@ describe('clue', () => {
   });
 
   it('opens the chat phase for 90s after two passes, with clueSeat null and two entries per seat', () => {
+    // Distinct words: `c0`/`c1` all normalize to `c` and would be rejected as duplicates.
+    const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
     let s = started();
     let n = 0;
     while (s.phase === 'clue') {
-      s = apply(s, { type: 'clue', playerId: whoseTurn(s), word: `c${n++}`, at: 3000 }).state;
+      expect(n).toBeLessThan(words.length); // a rejected clue would otherwise loop forever
+      s = apply(s, { type: 'clue', playerId: whoseTurn(s), word: words[n++], at: 3000 }).state;
     }
     expect(n).toBe(4);
     expect(s.phase).toBe('chat');
@@ -1227,7 +1230,61 @@ function timeout(state: RoomState, event: Extract<Event, { type: 'timeout' }>): 
 - [ ] **Step 5: Run to verify pass**
 
 Run: `npm test && npm run typecheck`
-Expected: all game tests pass; `test/worker/room.test.ts` still passes (it only asserts `phase !== 'lobby'`). Typecheck is clean except possibly `src/client/app.ts`, which does not yet use the new fields; if it errors on `Phase`, leave it for Task 8 and note it.
+Expected: all game tests pass; `test/worker/room.test.ts` still passes (it only asserts `phase !== 'lobby'`).
+
+Typecheck will report two errors in `src/game/redact.ts`: the widened `SeatView` and `Snapshot` now require fields it does not build. Task 6 rewrites that file properly; for now replace it with exactly this, which adds only the fields the types demand and withholds the word from everyone so no half-finished rule can leak it:
+
+```ts
+import type { RoomState } from './state';
+import type { RoundView, SeatView, Snapshot } from './protocol';
+
+/**
+ * The only path from room state to a client. Strips everything a viewer
+ * must not know about other seats.
+ *
+ * Task 6 implements the real round rules. Until then `word` and `stealGuess`
+ * are withheld from every viewer: a stub must never leak more than the
+ * finished rule would.
+ */
+export function redact(state: RoomState, viewerPlayerId: string | null): Snapshot {
+  const you = viewerPlayerId === null ? undefined : state.seats.find((s) => s.playerId === viewerPlayerId);
+  const seats: SeatView[] = state.seats.map((s) => {
+    const mine = you !== undefined && s.index === you.index;
+    const view: SeatView = {
+      index: s.index,
+      alias: s.alias,
+      connected: s.connected,
+      clues: s.clues,
+      voted: s.vote !== null,
+    };
+    if (mine || state.phase === 'lobby') view.displayName = s.displayName;
+    if (mine) view.kind = s.kind;
+    return view;
+  });
+  const r = state.round;
+  const round: RoundView | null =
+    r === null
+      ? null
+      : {
+          category: r.category,
+          word: null,
+          clueSeat: state.phase === 'clue' ? r.clueSeat : null,
+          cluePass: r.cluePass,
+          ejected: r.ejected,
+          stealGuess: null,
+          result: r.result,
+        };
+  return {
+    code: state.code,
+    phase: state.phase,
+    you: you ? you.index : null,
+    phaseEndsAt: state.phaseEndsAt,
+    seats,
+    transcript: state.transcript,
+    round,
+  };
+}
+```
 
 Also confirm the worker still compiles: `src/worker/room.ts` builds the `start` event without `at`/`seed`, which now fails typecheck. Patch that one line in `src/worker/room.ts` now so the tree stays green:
 
@@ -1241,7 +1298,7 @@ And in `dispatch`, drop the `rng` argument: `const result = apply(this.state, ev
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/game/protocol.ts src/game/state.ts src/worker/room.ts test/game/state.test.ts test/game/redact.test.ts
+git add src/game/protocol.ts src/game/state.ts src/game/redact.ts src/worker/room.ts test/game/state.test.ts test/game/redact.test.ts
 git commit -m "Seeded start, word and imposter assignment, clue phase with turn timer
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
@@ -1787,6 +1844,8 @@ import { connect, createRoom, type Client } from './helpers';
 import type { Snapshot } from '../../src/game/protocol';
 
 const NAMES = ['Ada', 'Bob', 'Cal'];
+/** Distinct clue words. `clue0`/`clue1` would all normalize to `clue` and be rejected as duplicates. */
+const CLUE_WORDS = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
 
 /** Three humans in the clue phase. `seatOf[i]` is the seat index of player i; `byYou(seat)` returns that seat's client. */
 async function startedRoom() {
@@ -1816,7 +1875,8 @@ async function playClues(room: Awaited<ReturnType<typeof startedRoom>>): Promise
   let n = 0;
   while (snap.phase === 'clue') {
     const turn = snap.round!.clueSeat!;
-    room.byYou(turn).send({ type: 'clue', word: `clue${n++}` });
+    expect(n).toBeLessThan(CLUE_WORDS.length); // a rejected clue would otherwise loop forever
+    room.byYou(turn).send({ type: 'clue', word: CLUE_WORDS[n++] });
     snap = await room.clients[0].state((s) => s.phase !== 'clue' || s.round!.clueSeat !== turn);
   }
   expect(n).toBe(6);
@@ -1865,7 +1925,7 @@ describe('a round in the Room Durable Object', () => {
     const room = await startedRoom();
     const chat = await playClues(room);
     expect(chat.phase).toBe('chat');
-    room.clients[1].send({ type: 'chat', text: 'who said clue0?' });
+    room.clients[1].send({ type: 'chat', text: 'who said alpha?' });
     await room.clients[0].state((s) => s.transcript.length === 1);
 
     await room.fireAlarm();
@@ -2597,10 +2657,13 @@ const whose = () => (snapA.round.clueSeat === snapA.you ? a : b);
 whose().send({ type: 'clue', word: 'two words' });
 assert.equal(await whose().error(), 'clue-one-word', 'multi-word clue rejected');
 
+// Distinct words: `clue0`/`clue1` would all normalize to `clue` and be rejected as duplicates.
+const CLUE_WORDS = ['alpha', 'bravo', 'charlie', 'delta'];
 let n = 0;
 while (snapA.phase === 'clue') {
   const turn = snapA.round.clueSeat;
-  whose().send({ type: 'clue', word: `clue${n++}` });
+  assert.ok(n < CLUE_WORDS.length, 'a rejected clue would loop forever');
+  whose().send({ type: 'clue', word: CLUE_WORDS[n++] });
   snapA = await a.state((s) => s.phase !== 'clue' || s.round.clueSeat !== turn);
 }
 assert.equal(n, 4, 'two humans, two passes');
@@ -2749,4 +2812,7 @@ Recorded here so they are not lost; none of them block m2.
 - **Bot tells.** `connected: false` (only humans disconnect) and `voted: false` during the vote (bots never vote in M2) both identify bots. Both must be closed before bot-call scoring ships.
 - **Rate-limit `POST /rooms`** before the public deploy.
 - **Leak checklist.** `OTHER_SEAT_SECRETS` in `test/game/redact.test.ts` gains `role` in M4; the reveal test gains Knight/Knave columns.
+- **Digits-only clues.** `normalizeWord` strips non-letters, so a clue of only
+  digits or punctuation normalizes to the empty string, and the second such clue
+  in a round is rejected as a duplicate. Harmless in play; tighten if it surfaces.
 - **Clock skew.** The countdown compares the server's `phaseEndsAt` to the browser clock. If phones show timers that are off by seconds, add a `now` field to the snapshot and compute an offset on the client.
