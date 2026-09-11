@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { apply, createRoom, type RoomState } from '../../src/game/state';
 import { redact } from '../../src/game/redact';
-import { seededRng } from '../../src/game/aliases';
 
 function lobby(): RoomState {
   let state = createRoom('ABCD', 0);
@@ -11,7 +10,7 @@ function lobby(): RoomState {
 }
 
 function started(): RoomState {
-  return apply(lobby(), { type: 'start', playerId: 'p0' }, seededRng(1)).state;
+  return apply(lobby(), { type: 'start', playerId: 'p0', at: 10, seed: 1 }).state;
 }
 
 /** Fields that must never reach any client about another seat. */

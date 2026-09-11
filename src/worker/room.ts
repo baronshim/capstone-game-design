@@ -83,7 +83,7 @@ export class RoomObject extends DurableObject<Env> {
     } else if (msg.type === 'chat') {
       event = { type: 'chat', playerId: att.playerId, text: String(msg.text ?? ''), at: Date.now() };
     } else if (msg.type === 'start') {
-      event = { type: 'start', playerId: att.playerId };
+      event = { type: 'start', playerId: att.playerId, at: Date.now(), seed: crypto.getRandomValues(new Uint32Array(1))[0] };
     } else {
       this.send(ws, { type: 'error', code: 'unknown-type', message: 'Unknown message type' });
       return;
