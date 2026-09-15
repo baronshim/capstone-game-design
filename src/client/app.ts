@@ -24,6 +24,10 @@ function showError(message: string): void {
 }
 
 function send(msg: ClientMessage): void {
+  // Clear any previous error/notice on the next user action, so a rejection
+  // (e.g. "one word only") stays visible until then instead of being wiped
+  // by the state snapshot that follows it.
+  showError('');
   if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
 }
 
@@ -62,7 +66,6 @@ function handle(msg: ServerMessage): void {
   }
   retries = 0;
   snapshot = msg.snapshot;
-  showError('');
   history.replaceState(null, '', `?room=${roomCode}`);
   render();
 }
