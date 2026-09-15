@@ -1,8 +1,6 @@
 import type { ChatLine } from '../game/protocol';
+import type { BotAction } from '../game/state';
 import { seededRng } from '../game/aliases';
-
-/** The action a bot is being asked to take. Mirrors state.ts's BotAction (Task 2 adds the export there). */
-export type BotAction = 'clue' | 'chat' | 'vote' | 'steal';
 
 /** What one bot is allowed to know when it acts. Never carries playerIds or display names. */
 export interface BotContext {
@@ -83,13 +81,13 @@ export const MAX_BOT_LINE = 140;
 export function schemaFor(action: BotAction): Record<string, unknown> {
   switch (action) {
     case 'clue':
-      return { type: 'object', properties: { clue: { type: 'string' } }, required: ['clue'] };
+      return { type: 'object', properties: { clue: { type: 'string', maxLength: 20 } }, required: ['clue'] };
     case 'chat':
-      return { type: 'object', properties: { say: { type: ['string', 'null'] } }, required: ['say'] };
+      return { type: 'object', properties: { say: { type: ['string', 'null'], maxLength: 140 } }, required: ['say'] };
     case 'vote':
       return { type: 'object', properties: { vote: { type: 'integer', minimum: 0, maximum: 5 } }, required: ['vote'] };
     case 'steal':
-      return { type: 'object', properties: { word: { type: 'string' } }, required: ['word'] };
+      return { type: 'object', properties: { word: { type: 'string', maxLength: 40 } }, required: ['word'] };
   }
 }
 
