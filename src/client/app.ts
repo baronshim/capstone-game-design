@@ -1,4 +1,5 @@
 import type { ClientMessage, ServerMessage, Snapshot } from '../game/protocol';
+import { cardHtml, logHtml, revealHtml, seatsHtml, turnHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -16,6 +17,7 @@ function getPlayerId(): string {
 let socket: WebSocket | null = null;
 let snapshot: Snapshot | null = null;
 let roomCode = '';
+let retries = 0;
 
 function showError(message: string): void {
   $('error').textContent = message;
@@ -40,8 +42,12 @@ function connect(code: string): void {
   socket.onopen = () => send({ type: 'join', playerId: getPlayerId(), displayName: $<HTMLInputElement>('name').value });
   socket.onmessage = (ev) => handle(JSON.parse(ev.data as string) as ServerMessage);
   socket.onclose = () => {
-    // Reconnect only if we were ever in the room (not for room-not-found).
-    if (snapshot) setTimeout(() => connect(roomCode), 1000);
+    // Reconnect only if we were ever in the room (not for room-not-found), backing off up to 10s.
+    if (!snapshot) return;
+    const delay = Math.min(10_000, 1000 * 2 ** retries);
+    retries++;
+    showError(`Connection lost. Reconnecting in ${Math.round(delay / 1000)}s…`);
+    setTimeout(() => connect(roomCode), delay);
   };
 }
 
@@ -54,46 +60,62 @@ function handle(msg: ServerMessage): void {
     }
     return;
   }
+  retries = 0;
   snapshot = msg.snapshot;
   showError('');
   history.replaceState(null, '', `?room=${roomCode}`);
   render();
 }
 
-function nameOf(seat: number): string {
-  const s = snapshot?.seats[seat];
-  return s?.alias ?? s?.displayName ?? `Seat ${seat + 1}`;
-}
-
-function esc(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
-  );
+function show(id: string, on: boolean): void {
+  $(id).hidden = !on;
 }
 
 function render(): void {
   if (!snapshot) return;
   const snap = snapshot;
+  const ph = snap.phase;
+  const seated = snap.you !== null;
+  const myTurn = ph === 'clue' && snap.round?.clueSeat === snap.you;
+  const imposter = seated && snap.seats[snap.you as number].isImposter === true;
+  const chatOpen = ph === 'lobby' || ph === 'chat' || ph === 'reveal';
+
   $('home').hidden = true;
   $('room').hidden = false;
   $('room-code').textContent = snap.code;
-  $('phase').textContent = snap.phase;
-  $('start').hidden = snap.phase !== 'lobby' || snap.you === null;
+  $('phase').textContent = ph;
 
-  $('seats').innerHTML = snap.seats
-    .map((s) => {
-      const you = s.index === snap.you ? ' (you)' : '';
-      return `<div class="seat ${s.connected ? '' : 'off'}">${esc(nameOf(s.index))}${you}</div>`;
-    })
-    .join('');
-
+  show('card', snap.round !== null && ph !== 'lobby');
+  $('card').innerHTML = cardHtml(snap);
+  $('seats').innerHTML = seatsHtml(snap);
+  show('start', ph === 'lobby' && seated);
+  show('turn', ph === 'clue');
+  $('turn').innerHTML = turnHtml(snap);
+  show('clue-form', myTurn);
+  if (!myTurn) $<HTMLInputElement>('clue').value = '';
+  show('vote', ph === 'vote');
+  $('vote').innerHTML = voteHtml(snap);
+  show('steal-form', ph === 'steal' && imposter);
+  show('steal-wait', ph === 'steal' && !imposter);
+  show('reveal', ph === 'reveal');
+  $('reveal').innerHTML = revealHtml(snap);
+  show('again', ph === 'reveal' && seated);
+  show('log', chatOpen);
+  show('composer', chatOpen);
   const log = $('log');
-  log.innerHTML = snap.transcript
-    .map((l) => `<div class="line"><b>${esc(nameOf(l.seat))}</b>${esc(l.text)}</div>`)
-    .join('');
+  log.innerHTML = logHtml(snap);
   log.scrollTop = log.scrollHeight;
+
+  if (myTurn) $('clue').focus();
+  if (ph === 'steal' && imposter) $('steal').focus();
+  tick();
 }
+
+function tick(): void {
+  const end = snapshot?.phaseEndsAt ?? null;
+  $('timer').textContent = end === null ? '' : `${Math.max(0, Math.ceil((end - Date.now()) / 1000))}s`;
+}
+setInterval(tick, 250);
 
 $('create').onclick = async () => {
   const res = await fetch('/rooms', { method: 'POST' });
@@ -103,12 +125,29 @@ $('create').onclick = async () => {
 
 $('join').onclick = () => connect($<HTMLInputElement>('code').value);
 $('start').onclick = () => send({ type: 'start' });
+$('again').onclick = () => send({ type: 'again' });
 
 $<HTMLFormElement>('composer').onsubmit = (e) => {
   e.preventDefault();
   const input = $<HTMLInputElement>('text');
   send({ type: 'chat', text: input.value });
   input.value = '';
+};
+
+$<HTMLFormElement>('clue-form').onsubmit = (e) => {
+  e.preventDefault();
+  // Keep the text so a rejected clue can be edited; render() clears it when the turn passes.
+  send({ type: 'clue', word: $<HTMLInputElement>('clue').value });
+};
+
+$<HTMLFormElement>('steal-form').onsubmit = (e) => {
+  e.preventDefault();
+  send({ type: 'steal', word: $<HTMLInputElement>('steal').value });
+};
+
+$('vote').onclick = (e) => {
+  const button = (e.target as HTMLElement).closest('button');
+  if (button?.dataset.seat !== undefined) send({ type: 'vote', seat: Number(button.dataset.seat) });
 };
 
 const nameInput = $<HTMLInputElement>('name');

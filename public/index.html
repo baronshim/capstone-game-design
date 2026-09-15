@@ -13,12 +13,22 @@
     label { display: block; margin-bottom: 12px; }
     .row { display: flex; gap: 8px; margin-bottom: 8px; }
     .row input { flex: 1; min-width: 0; }
+    h2 { display: flex; align-items: baseline; gap: 8px; }
+    h2 small { font-weight: normal; opacity: 0.7; }
+    .timer { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 1.2em; }
+    .card { border: 1px solid #8884; border-radius: 8px; padding: 12px; margin: 8px 0; }
+    .card b { font-size: 1.3em; }
     #seats { margin: 8px 0; }
-    .seat { padding: 4px 0; }
+    .seat { padding: 4px 0; display: flex; gap: 8px; align-items: baseline; }
     .seat.off { opacity: 0.5; }
-    #log { height: 50vh; overflow-y: auto; border: 1px solid #8884; padding: 8px; margin: 8px 0; }
+    .seat.turn { font-weight: bold; }
+    .seat .clues { opacity: 0.7; font-size: 0.9em; }
+    #vote button { display: block; width: 100%; margin: 6px 0; text-align: left; }
+    #log { height: 40vh; overflow-y: auto; border: 1px solid #8884; padding: 8px; margin: 8px 0; }
     .line { margin: 4px 0; overflow-wrap: anywhere; }
     .line b { margin-right: 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    td, th { text-align: left; padding: 4px; border-bottom: 1px solid #8884; }
     .error { color: #c33; min-height: 1.2em; }
   </style>
 </head>
@@ -35,11 +45,25 @@
     </section>
 
     <section id="room" hidden>
-      <h2>Room <span id="room-code"></span> <small id="phase"></small></h2>
+      <h2>Room <span id="room-code"></span> <small id="phase"></small> <span id="timer" class="timer"></span></h2>
+      <div id="card" class="card" hidden></div>
       <div id="seats"></div>
-      <button id="start">Start</button>
-      <div id="log"></div>
-      <form id="composer" class="row">
+      <button id="start" hidden>Start</button>
+      <p id="turn" hidden></p>
+      <form id="clue-form" class="row" hidden>
+        <input id="clue" maxlength="20" autocomplete="off" placeholder="One-word clue">
+        <button>Give clue</button>
+      </form>
+      <div id="vote" hidden></div>
+      <form id="steal-form" class="row" hidden>
+        <input id="steal" maxlength="40" autocomplete="off" placeholder="Guess the word">
+        <button>Steal</button>
+      </form>
+      <p id="steal-wait" hidden>The imposter was caught and is guessing the word…</p>
+      <div id="reveal" hidden></div>
+      <button id="again" hidden>Play again</button>
+      <div id="log" hidden></div>
+      <form id="composer" class="row" hidden>
         <input id="text" maxlength="280" autocomplete="off" placeholder="Say something">
         <button>Send</button>
       </form>
