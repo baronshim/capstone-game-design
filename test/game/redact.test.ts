@@ -10,8 +10,20 @@ function lobby(): RoomState {
   return apply(state, { type: 'chat', playerId: 'p0', text: 'hey', at: 1 }).state;
 }
 
+function startWith(seed: number): RoomState {
+  return apply(lobby(), { type: 'start', playerId: 'p0', at: 10, seed }).state;
+}
+
+/** First seed whose imposter is human, so the imposter's view can be redacted by playerId. */
+const SEED = (() => {
+  for (let seed = 1; seed < 1000; seed++) {
+    if (startWith(seed).seats.find((s) => s.isImposter)!.kind === 'human') return seed;
+  }
+  throw new Error('no seed with a human imposter');
+})();
+
 function inClue(): RoomState {
-  return apply(lobby(), { type: 'start', playerId: 'p0', at: 10, seed: 1 }).state;
+  return startWith(SEED);
 }
 
 function inChat(): RoomState {
@@ -37,6 +49,7 @@ function inSteal(): RoomState {
   }
   const crew = s.seats.find((seat) => seat.kind === 'human' && !seat.isImposter)!;
   s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: crew.index, at: 41 }).state;
+  s = apply(s, { type: 'timeout', at: 42 }).state;
   expect(s.phase).toBe('steal');
   return s;
 }

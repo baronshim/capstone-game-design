@@ -10,14 +10,10 @@ export const DURATIONS = {
   botcall: 20_000,
 } as const;
 
-/**
- * Picks the imposter uniformly among human seats. M2 only: bots cannot act yet,
- * so a bot imposter would make the round unwinnable. M3 widens this to all seats.
- */
-export function chooseImposter(seats: { index: number; kind: SeatKind }[], rng: Rng): number {
-  const humans = seats.filter((s) => s.kind === 'human');
-  if (humans.length === 0) throw new RangeError('chooseImposter needs at least one human seat');
-  return humans[Math.floor(rng() * humans.length)].index;
+/** Picks the imposter uniformly among all seats, bots included (spec 2.2). */
+export function chooseImposter(seats: { index: number }[], rng: Rng): number {
+  if (seats.length === 0) throw new RangeError('chooseImposter needs at least one seat');
+  return seats[Math.floor(rng() * seats.length)].index;
 }
 
 /** Majority of votes cast (strictly more than half) ejects; ties and abstentions eject nobody. */

@@ -18,14 +18,10 @@ describe('chooseImposter', () => {
     { index: 5, kind: 'human' as const },
   ];
 
-  it('only ever picks a human seat (M2) and reaches every human across seeds', () => {
+  it('picks any of the six seats, bots included, and reaches every seat across seeds', () => {
     const picked = new Set<number>();
-    for (let seed = 1; seed <= 40; seed++) {
-      const i = chooseImposter(seats, seededRng(seed));
-      expect(seats[i].kind).toBe('human');
-      picked.add(i);
-    }
-    expect(picked).toEqual(new Set([1, 3, 5]));
+    for (let seed = 1; seed <= 60; seed++) picked.add(chooseImposter(seats, seededRng(seed)));
+    expect(picked).toEqual(new Set([0, 1, 2, 3, 4, 5]));
   });
 
   it('is deterministic for a seed', () => {

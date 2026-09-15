@@ -8,7 +8,7 @@ const NAMES = ['Ada', 'Bob', 'Cal'];
 const CLUE_WORDS = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
 
 /** Three humans in the clue phase. `seatOf[i]` is the seat index of player i; `byYou(seat)` returns that seat's client. */
-async function startedRoom() {
+async function startedRoomOnce() {
   const code = await createRoom();
   const clients: Client[] = [];
   const snaps: Snapshot[] = [];
@@ -29,11 +29,32 @@ async function startedRoom() {
   return { code, clients, snaps, fireAlarm, byYou, imposterClientIndex };
 }
 
+/** Retries rooms until the imposter is one of the humans (each try has a 1-in-2 chance with three humans). */
+async function startedRoom() {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const room = await startedRoomOnce();
+    if (room.imposterClientIndex >= 0) return room;
+  }
+  throw new Error('no room with a human imposter in 20 tries');
+}
+
+/** Fires the alarm through bot turns until a human is on turn (or the clue phase ends), returning the latest snapshot. */
+async function toHumanTurn(room: Awaited<ReturnType<typeof startedRoom>>, snap: Snapshot): Promise<Snapshot> {
+  while (snap.phase === 'clue' && room.byYou(snap.round!.clueSeat!) === undefined) {
+    const turn = snap.round!.clueSeat!;
+    await room.fireAlarm();
+    snap = await room.clients[0].state((s) => s.phase !== 'clue' || s.round!.clueSeat !== turn);
+  }
+  return snap;
+}
+
 /** Plays every human clue turn with an accepted clue and returns the first chat-phase snapshot seen by client 0. */
 async function playClues(room: Awaited<ReturnType<typeof startedRoom>>): Promise<Snapshot> {
   let snap = room.snaps[0];
   let n = 0;
   while (snap.phase === 'clue') {
+    snap = await toHumanTurn(room, snap);
+    if (snap.phase !== 'clue') break;
     const turn = snap.round!.clueSeat!;
     expect(n).toBeLessThan(CLUE_WORDS.length); // a rejected clue would otherwise loop forever
     room.byYou(turn).send({ type: 'clue', word: CLUE_WORDS[n++] });
@@ -48,8 +69,6 @@ describe('a round in the Room Durable Object', () => {
     const { snaps, imposterClientIndex } = await startedRoom();
     const first = snaps[0];
     expect(typeof first.phaseEndsAt).toBe('number');
-    expect(first.seats[first.round!.clueSeat!].clues).toEqual([]);
-    expect(snaps.map((s) => s.you)).toContain(first.round!.clueSeat);
     expect(snaps.filter((s) => s.seats[s.you!].isImposter)).toHaveLength(1);
     expect(snaps[imposterClientIndex].round!.word).toBeNull();
     for (let i = 0; i < snaps.length; i++) {
@@ -61,7 +80,8 @@ describe('a round in the Room Durable Object', () => {
 
   it('rejects out-of-turn and two-word clues, accepts a valid one', async () => {
     const room = await startedRoom();
-    const turn = room.snaps[0].round!.clueSeat!;
+    const snap = await toHumanTurn(room, room.snaps[0]);
+    const turn = snap.round!.clueSeat!;
     const other = room.clients.find((c) => c !== room.byYou(turn))!;
     other.send({ type: 'clue', word: 'sneaky' });
     expect(await other.error()).toBe('not-your-turn');
@@ -74,7 +94,8 @@ describe('a round in the Room Durable Object', () => {
 
   it('a clue timeout passes the turn as an empty clue', async () => {
     const room = await startedRoom();
-    const turn = room.snaps[0].round!.clueSeat!;
+    const snap = await toHumanTurn(room, room.snaps[0]);
+    const turn = snap.round!.clueSeat!;
     await room.fireAlarm();
     const next = await room.clients[0].state((s) => s.seats[turn].clues.length === 1);
     expect(next.seats[turn].clues).toEqual(['']);
@@ -97,6 +118,7 @@ describe('a round in the Room Durable Object', () => {
     for (const c of crew) c.send({ type: 'vote', seat: impSeat });
     const crewSeat = room.snaps.find((s) => s.you !== impSeat)!.you!;
     room.clients[room.imposterClientIndex].send({ type: 'vote', seat: crewSeat });
+    await room.fireAlarm();
 
     const stealing = await room.clients[room.imposterClientIndex].state((s) => s.phase === 'steal');
     expect(stealing.round!.ejected).toBe(impSeat);

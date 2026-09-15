@@ -7,6 +7,7 @@ export const SEAT_COUNT = 6;
 export const MAX_CHAT_LENGTH = 280;
 export const MAX_TRANSCRIPT = 200;
 const MAX_NAME_LENGTH = 20;
+const MAX_STEAL_LENGTH = 40;
 
 export interface Seat {
   index: number;
@@ -14,6 +15,7 @@ export interface Seat {
   alias: string | null;
   playerId?: string;
   displayName?: string;
+  /** Bots are always connected. */
   connected: boolean;
   isImposter: boolean;
   /** One entry per clue pass; '' means the turn passed with no clue. */
@@ -56,11 +58,19 @@ export type Event =
   | { type: 'clue'; playerId: string; word: string; at: number }
   | { type: 'vote'; playerId: string; seat: number; at: number }
   | { type: 'steal'; playerId: string; word: string; at: number }
-  | { type: 'again'; playerId: string; at: number }
   | { type: 'botcall'; playerId: string; calls: BotCall[]; at: number }
-  | { type: 'timeout'; at: number };
+  | { type: 'again'; playerId: string; at: number }
+  | { type: 'timeout'; at: number }
+  /** Bot events are produced by the Durable Object from botTurn effects; `pass` guards against a clue from the previous pass. */
+  | { type: 'botClue'; seat: number; pass: 1 | 2; word: string; at: number }
+  | { type: 'botChat'; seat: number; text: string; at: number }
+  | { type: 'botVote'; seat: number; target: number; at: number }
+  | { type: 'botSteal'; seat: number; word: string; at: number };
 
-export type Effect = { type: 'error'; to: string; code: string; message: string };
+export type BotAction = 'clue' | 'chat' | 'vote' | 'steal';
+/** Asks the Durable Object to run one bot action after `delayMs`. A turn that arrives late is ignored by the reducer. */
+export type BotTurn = { type: 'botTurn'; seat: number; action: BotAction; delayMs: number };
+export type Effect = { type: 'error'; to: string; code: string; message: string } | BotTurn;
 
 export interface Result {
   state: RoomState;
@@ -74,6 +84,11 @@ export function createRoom(code: string, at: number): RoomState {
 }
 
 export function apply(state: RoomState, event: Event): Result {
+  const result = applyEvent(state, event);
+  return { state: result.state, effects: [...result.effects, ...botEffects(state, result.state)] };
+}
+
+function applyEvent(state: RoomState, event: Event): Result {
   switch (event.type) {
     case 'join':
       return join(state, event);
@@ -89,13 +104,63 @@ export function apply(state: RoomState, event: Event): Result {
       return vote(state, event);
     case 'steal':
       return steal(state, event);
-    case 'again':
-      return again(state, event);
     case 'botcall':
       return botcall(state, event);
+    case 'again':
+      return again(state, event);
     case 'timeout':
       return timeout(state, event);
+    case 'botClue':
+      return botClue(state, event);
+    case 'botChat':
+      return botChat(state, event);
+    case 'botVote':
+      return botVote(state, event);
+    case 'botSteal':
+      return botSteal(state, event);
   }
+}
+
+/**
+ * Bot turns owed by the transition from `prev` to `next`: the bot whose clue
+ * turn just opened, every bot's chat ticks when the chat opens, every bot's
+ * vote when the vote opens, and the steal of an ejected bot imposter. Timing
+ * jitter derives from the round seed so a round is reproducible.
+ */
+export function botEffects(prev: RoomState, next: RoomState): BotTurn[] {
+  const round = next.round;
+  if (!round) return [];
+  const out: BotTurn[] = [];
+  if (next.phase === 'clue') {
+    const seat = next.seats[round.clueSeat!];
+    const newTurn = prev.phase !== 'clue' || prev.round?.clueSeat !== round.clueSeat || prev.round?.cluePass !== round.cluePass;
+    if (newTurn && seat.kind === 'bot') {
+      const rng = seededRng(round.seed + round.cluePass * 100 + seat.index);
+      out.push({ type: 'botTurn', seat: seat.index, action: 'clue', delayMs: 1500 + Math.floor(rng() * 4500) });
+    }
+  } else if (next.phase === 'chat' && prev.phase !== 'chat') {
+    const rng = seededRng(round.seed ^ 0x5bd1e995);
+    for (const seat of next.seats) {
+      if (seat.kind !== 'bot') continue;
+      const ticks = 2 + Math.floor(rng() * 3);
+      for (let i = 0; i < ticks; i++) {
+        out.push({ type: 'botTurn', seat: seat.index, action: 'chat', delayMs: 4000 + Math.floor(rng() * 76_000) });
+      }
+    }
+  } else if (next.phase === 'vote' && prev.phase !== 'vote') {
+    const rng = seededRng(round.seed ^ 0x9e3779b9);
+    for (const seat of next.seats) {
+      if (seat.kind !== 'bot') continue;
+      out.push({ type: 'botTurn', seat: seat.index, action: 'vote', delayMs: 3000 + Math.floor(rng() * 9000) });
+    }
+  } else if (next.phase === 'steal' && prev.phase !== 'steal') {
+    const ejected = next.seats[round.ejected!];
+    if (ejected.kind === 'bot') {
+      const rng = seededRng(round.seed ^ 0x27d4eb2f);
+      out.push({ type: 'botTurn', seat: ejected.index, action: 'steal', delayMs: 2000 + Math.floor(rng() * 6000) });
+    }
+  }
+  return out;
 }
 
 function ok(state: RoomState): Result {
@@ -140,14 +205,26 @@ function disconnect(state: RoomState, event: Extract<Event, { type: 'disconnect'
   return ok({ ...state, seats });
 }
 
+/** Appends a chat line for a seat, trimmed and capped; an empty line is a no-op. */
+function appendLine(state: RoomState, seat: number, raw: string, at: number): RoomState {
+  const text = raw.trim().slice(0, MAX_CHAT_LENGTH);
+  if (!text) return state;
+  const line: ChatLine = { seat, text, at };
+  return { ...state, transcript: [...state.transcript, line].slice(-MAX_TRANSCRIPT) };
+}
+
 function chat(state: RoomState, event: Extract<Event, { type: 'chat' }>): Result {
   const seat = seatOf(state, event.playerId);
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
   if (!CHAT_PHASES.includes(state.phase)) return fail(state, event.playerId, 'chat-closed', 'Chat opens after the clues');
-  const text = event.text.trim().slice(0, MAX_CHAT_LENGTH);
-  if (!text) return ok(state);
-  const line: ChatLine = { seat: seat.index, text, at: event.at };
-  return ok({ ...state, transcript: [...state.transcript, line].slice(-MAX_TRANSCRIPT) });
+  return ok(appendLine(state, seat.index, event.text, event.at));
+}
+
+function botChat(state: RoomState, event: Extract<Event, { type: 'botChat' }>): Result {
+  if (state.phase !== 'chat') return ok(state);
+  const seat = state.seats[event.seat];
+  if (!seat || seat.kind !== 'bot') return ok(state);
+  return ok(appendLine(state, seat.index, event.text, event.at));
 }
 
 function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Result {
@@ -188,8 +265,7 @@ function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Resu
 
   const round: Round = { seed: event.seed, category, word, clueSeat: 0, cluePass: 1, ejected: null, stealGuess: null, result: null };
   // Lobby chat referenced old seat indices, and the round is a fresh transcript anyway.
-  const next: RoomState = { ...state, phase: 'clue', phaseEndsAt: event.at + DURATIONS.clueTurn, seats, transcript: [], round };
-  return ok(skipBotClues(next, event.at));
+  return ok({ ...state, phase: 'clue', phaseEndsAt: event.at + DURATIONS.clueTurn, seats, transcript: [], round });
 }
 
 /** Records a clue ('' for a passed turn) for the seat whose turn it is, then moves to the next turn or opens the chat. */
@@ -206,14 +282,6 @@ function recordClue(state: RoomState, clueText: string, at: number): RoomState {
   return { ...state, seats, phase: 'chat', phaseEndsAt: at + DURATIONS.chat, round: { ...round, clueSeat: null } };
 }
 
-/** M2 has no bot brains: a bot's clue turn passes immediately. M3 replaces this with a botTurn effect. */
-function skipBotClues(state: RoomState, at: number): RoomState {
-  while (state.phase === 'clue' && state.seats[state.round!.clueSeat!].kind === 'bot') {
-    state = recordClue(state, '', at);
-  }
-  return state;
-}
-
 function clue(state: RoomState, event: Extract<Event, { type: 'clue' }>): Result {
   const seat = seatOf(state, event.playerId);
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
@@ -225,11 +293,27 @@ function clue(state: RoomState, event: Extract<Event, { type: 'clue' }>): Result
   // word has simply outed themselves rather than exploited anything.
   const check = validateClue(event.word, state.round.word, prior, !seat.isImposter);
   if (!check.ok) return fail(state, event.playerId, check.code, check.message);
-  return ok(skipBotClues(recordClue(state, check.clue, event.at), event.at));
+  return ok(recordClue(state, check.clue, event.at));
+}
+
+/** A bot's clue never skips the secret-word check (spec 5.7); anything invalid passes the turn silently. */
+function botClue(state: RoomState, event: Extract<Event, { type: 'botClue' }>): Result {
+  const round = state.round;
+  if (state.phase !== 'clue' || !round || round.clueSeat !== event.seat || round.cluePass !== event.pass) return ok(state);
+  const seat = state.seats[event.seat];
+  if (!seat || seat.kind !== 'bot') return ok(state);
+  const prior = state.seats.flatMap((s) => s.clues);
+  const check = validateClue(event.word, round.word, prior);
+  return ok(recordClue(state, check.ok ? check.clue : '', event.at));
 }
 
 function enterVote(state: RoomState, at: number): RoomState {
   return { ...state, phase: 'vote', phaseEndsAt: at + DURATIONS.vote, seats: state.seats.map((s) => ({ ...s, vote: null })) };
+}
+
+/** Every seat that can still vote has: bots always vote, humans only while connected (spec 4.5). */
+function votesComplete(seats: Seat[]): boolean {
+  return seats.every((s) => s.vote !== null || (s.kind === 'human' && !s.connected));
 }
 
 /** The round is decided: humans get 20s to call every seat Human or Bot before the reveal (spec 2.3.5). */
@@ -255,8 +339,6 @@ function closeVote(state: RoomState, at: number): RoomState {
   const ejected = resolveVote(state.seats.map((s) => s.vote));
   const withEjected: RoomState = { ...state, round: { ...state.round!, ejected } };
   if (ejected === null || !state.seats[ejected].isImposter) return finish(withEjected, 'imposter', at);
-  // A bot imposter has nobody to make the steal guess (M3 gives bots one).
-  if (state.seats[ejected].kind === 'bot') return finish(withEjected, 'crew', at);
   return { ...withEjected, phase: 'steal', phaseEndsAt: at + DURATIONS.steal };
 }
 
@@ -269,8 +351,25 @@ function vote(state: RoomState, event: Extract<Event, { type: 'vote' }>): Result
   }
   const seats = state.seats.map((s) => (s.index === seat.index ? { ...s, vote: event.seat } : s));
   const next = { ...state, seats };
-  const allIn = seats.every((s) => s.kind !== 'human' || s.vote !== null);
-  return ok(allIn ? closeVote(next, event.at) : next);
+  return ok(votesComplete(seats) ? closeVote(next, event.at) : next);
+}
+
+/** A bot votes once; a second or malformed vote is ignored rather than rejected. */
+function botVote(state: RoomState, event: Extract<Event, { type: 'botVote' }>): Result {
+  if (state.phase !== 'vote') return ok(state);
+  const seat = state.seats[event.seat];
+  if (!seat || seat.kind !== 'bot' || seat.vote !== null) return ok(state);
+  const target = event.target;
+  if (!Number.isInteger(target) || target < 0 || target >= state.seats.length || target === seat.index) return ok(state);
+  const seats = state.seats.map((s) => (s.index === seat.index ? { ...s, vote: target } : s));
+  const next = { ...state, seats };
+  return ok(votesComplete(seats) ? closeVote(next, event.at) : next);
+}
+
+function resolveSteal(state: RoomState, word: string, at: number): RoomState {
+  const guess = word.trim().slice(0, MAX_STEAL_LENGTH);
+  const result: Outcome = isStealCorrect(guess, state.round!.word) ? 'imposter' : 'crew';
+  return finish({ ...state, round: { ...state.round!, stealGuess: guess } }, result, at);
 }
 
 function steal(state: RoomState, event: Extract<Event, { type: 'steal' }>): Result {
@@ -278,9 +377,14 @@ function steal(state: RoomState, event: Extract<Event, { type: 'steal' }>): Resu
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
   if (state.phase !== 'steal') return fail(state, event.playerId, 'wrong-phase', 'No steal in progress');
   if (!seat.isImposter) return fail(state, event.playerId, 'not-imposter', 'Only the imposter can steal');
-  const guess = event.word.trim().slice(0, 40);
-  const result: Outcome = isStealCorrect(guess, state.round!.word) ? 'imposter' : 'crew';
-  return ok(finish({ ...state, round: { ...state.round!, stealGuess: guess } }, result, event.at));
+  return ok(resolveSteal(state, event.word, event.at));
+}
+
+function botSteal(state: RoomState, event: Extract<Event, { type: 'botSteal' }>): Result {
+  if (state.phase !== 'steal') return ok(state);
+  const seat = state.seats[event.seat];
+  if (!seat || seat.kind !== 'bot' || !seat.isImposter) return ok(state);
+  return ok(resolveSteal(state, event.word, event.at));
 }
 
 function botcall(state: RoomState, event: Extract<Event, { type: 'botcall' }>): Result {
@@ -311,7 +415,7 @@ function again(state: RoomState, event: Extract<Event, { type: 'again' }>): Resu
 function timeout(state: RoomState, event: Extract<Event, { type: 'timeout' }>): Result {
   switch (state.phase) {
     case 'clue':
-      return ok(skipBotClues(recordClue(state, '', event.at), event.at));
+      return ok(recordClue(state, '', event.at));
     case 'chat':
       return ok(enterVote(state, event.at));
     case 'vote':
