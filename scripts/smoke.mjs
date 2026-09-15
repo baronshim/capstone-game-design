@@ -125,7 +125,7 @@ console.log('bot clues:', botClues.join(', '));
 
 // Bots chat: fake bots say "beep" once each right away; live bots say something else within the phase.
 if (LIVE) {
-  const chatted = await a.state((s) => s.transcript.some((l) => l.seat !== snapA.you && l.seat !== snapB.you && l.text !== 'beep'), 60_000);
+  const chatted = await a.state((s) => s.transcript.some((l) => l.seat !== snapA.you && l.seat !== snapB.you && l.text !== 'beep'), 95_000);
   console.log('a bot said:', chatted.transcript.find((l) => l.seat !== snapA.you && l.seat !== snapB.you).text);
 } else {
   await a.state((s) => new Set(s.transcript.filter((l) => l.text === 'beep').map((l) => l.seat)).size === 4);
