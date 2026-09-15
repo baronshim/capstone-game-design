@@ -200,13 +200,17 @@ export class RoomObject extends DurableObject<Env> {
   }
 
   private async runBot(turn: BotTurn, seed: number): Promise<void> {
-    if (!this.state?.round || this.state.round.seed !== seed) return;
-    const event = await this.runner.turn(this.state, turn);
-    if (!event) return;
-    if (event.type === 'botChat' && !this.instant) {
-      await new Promise((r) => setTimeout(r, Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length)));
+    try {
+      if (!this.state?.round || this.state.round.seed !== seed) return;
+      const event = await this.runner.turn(this.state, turn);
+      if (!event) return;
+      if (event.type === 'botChat' && !this.instant) {
+        await new Promise((r) => setTimeout(r, Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length)));
+      }
+      await this.dispatch(event);
+    } catch (err) {
+      console.warn(`bot ${turn.action} for seat ${turn.seat} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-    await this.dispatch(event);
   }
 
   /** Mirrors the reducer's deadline into the DO alarm, or arms the deletion TTL when idle and empty. */

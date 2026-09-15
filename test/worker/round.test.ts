@@ -182,6 +182,7 @@ describe('a round in the Room Durable Object with fake bots', () => {
     const lobby = await room.clients[0].state((s) => s.phase === 'lobby');
     expect(lobby.seats).toHaveLength(3);
     expect(lobby.round).toBeNull();
+    expect(lobby.seats.map((s) => s.displayName).sort()).toEqual([...NAMES].sort());
   });
 
   it('a vote timeout with no majority ends the round as an imposter win after the bot call', async () => {
