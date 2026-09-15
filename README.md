@@ -2,8 +2,8 @@
 
 A chat-based social deduction game where humans and AI bots share a 6-seat
 room. One seat is the imposter who does not know the word; every seat is
-secretly a Knight (must tell the truth) or a Knave (must lie); empty seats
-are bots trying to pass as human. Built for the See You in the Cosmos
+secretly a Knight (must tell the truth) or a Knave (must lie) (m4); empty
+seats are bots trying to pass as human. Built for the See You in the Cosmos
 adaptation assignment (theme: the curated self vs. the actual self).
 
 Design spec: `docs/superpowers/specs/2026-09-04-imposter-turing-design.md`
@@ -12,7 +12,9 @@ Plans: `docs/superpowers/plans/`
 ## A round (as of m2)
 
 1. **Lobby.** Create a room, share the 4-letter code, press Start with 1 to 6
-   humans. Empty seats become bots (inert until m3).
+   humans. Empty seats become bots (inert until m3). In m2 the sole human is
+   always the imposter and bots never vote, so use two or more humans for a
+   real round.
 2. **Clues.** Everyone gets an alias. One human is the imposter and sees only
    the category; everyone else sees the word. Two passes of one-word clues,
    20s per turn. The word itself and repeated clues are rejected.

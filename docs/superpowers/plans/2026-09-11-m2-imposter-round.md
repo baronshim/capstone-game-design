@@ -2816,3 +2816,11 @@ Recorded here so they are not lost; none of them block m2.
   digits or punctuation normalizes to the empty string, and the second such clue
   in a round is rejected as a duplicate. Harmless in play; tighten if it surfaces.
 - **Clock skew.** The countdown compares the server's `phaseEndsAt` to the browser clock. If phones show timers that are off by seconds, add a `now` field to the snapshot and compute an offset on the client.
+- **Transcript deltas.** Every event re-broadcasts the whole transcript (200 lines × 280 chars × 6 sockets). Switch to a `chat` delta message before bot chatter multiplies traffic.
+- **Vote closes early.** `allIn` in `state.ts` counts disconnected humans, so a dropped player forces the full 20 s vote. Treat disconnected humans as done.
+- **Ghost seats on `again`.** Disconnected humans keep their seats across Play Again and can fill the room. Drop seats disconnected at `again` time or add a kick.
+- **Duplicate error effects.** A player with two tabs open receives each rejection once per socket. Harmless; dedupe if it shows.
+- **`webSocketClose` vs `syncAlarm` socket counting.** The close handler filters the closing socket; `syncAlarm` counts the raw list. Verified equivalent by the TTL test; unify or comment.
+- **Stemmer comment.** `words.ts` says "consonant doubling" but strips any doubled trailing letter (`agreeing` → `agre`). Harmless for the shipped lists.
+- **Spec amendments.** Spec 4.2/4.3 still describe separate `chat {line}` and `reveal {fullState}` messages; M2 ships a single redacted `state` snapshot for both. Spec 2.3.1 ("a rejected clue returns an error") now has an imposter carve-out: the imposter's clue skips the secret-word check so the error code cannot be used as a word oracle. Update the spec text.
+- **Alarm trust.** `alarm()` deliberately trusts delivery (no `Date.now()` guard) so tests can fire phases early. If a late alarm ever steals a turn in production, add the guard and advance the test clock instead.
