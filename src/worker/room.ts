@@ -216,12 +216,21 @@ export class RoomObject extends DurableObject<Env> {
   /** Mirrors the reducer's deadline into the DO alarm, or arms the deletion TTL when idle and empty. */
   private async syncAlarm(): Promise<void> {
     if (!this.state) return;
-    if (this.state.phaseEndsAt !== null) {
-      await this.ctx.storage.setAlarm(this.state.phaseEndsAt);
-    } else if (this.ctx.getWebSockets().length === 0) {
-      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
-    } else {
-      await this.ctx.storage.deleteAlarm();
+    const timed = this.state.phaseEndsAt !== null;
+    const empty = this.ctx.getWebSockets().length === 0;
+    const target = timed ? this.state.phaseEndsAt : empty ? Date.now() + EMPTY_ROOM_TTL_MS : null;
+    const current = await this.ctx.storage.getAlarm();
+    // Re-arming with an unchanged deadline is a wasted write in production, and a burst of
+    // identical re-arms (several bot votes landing in one tick) has been seen to leave workerd's
+    // local alarm manager holding a stale, later time in dev, delaying the next phase's alarm.
+    if (target === null) {
+      if (current !== null) await this.ctx.storage.deleteAlarm();
+    } else if (!timed) {
+      // TTL case: the target creeps forward by a few ms on every call, so treat any
+      // still-future alarm as already armed instead of re-arming every time.
+      if (!(current !== null && current > Date.now())) await this.ctx.storage.setAlarm(target);
+    } else if (current !== target) {
+      await this.ctx.storage.setAlarm(target);
     }
   }
 
