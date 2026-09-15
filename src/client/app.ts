@@ -18,6 +18,9 @@ let socket: WebSocket | null = null;
 let snapshot: Snapshot | null = null;
 let roomCode = '';
 let retries = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+/** The viewer's own clue count as of the last render, to detect a new turn reusing the same box. */
+let lastClueCount = 0;
 
 function showError(message: string): void {
   $('error').textContent = message;
@@ -32,6 +35,10 @@ function send(msg: ClientMessage): void {
 }
 
 function connect(code: string): void {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   roomCode = code.trim().toUpperCase();
   if (roomCode.length !== 4) {
     showError('Room codes are 4 letters');
@@ -51,7 +58,7 @@ function connect(code: string): void {
     const delay = Math.min(10_000, 1000 * 2 ** retries);
     retries++;
     showError(`Connection lost. Reconnecting in ${Math.round(delay / 1000)}s…`);
-    setTimeout(() => connect(roomCode), delay);
+    reconnectTimer = setTimeout(() => connect(roomCode), delay);
   };
 }
 
@@ -95,7 +102,12 @@ function render(): void {
   show('turn', ph === 'clue');
   $('turn').innerHTML = turnHtml(snap);
   show('clue-form', myTurn);
-  if (!myTurn) $<HTMLInputElement>('clue').value = '';
+  // Clear the box on a fresh turn: either it left this seat, or it came back to
+  // this seat with a new clue recorded since the last render (one human with
+  // five bots wraps pass 1 straight back to the same human).
+  const myClueCount = seated ? snap.seats[snap.you as number].clues.length : 0;
+  if (!myTurn || myClueCount > lastClueCount) $<HTMLInputElement>('clue').value = '';
+  lastClueCount = myClueCount;
   show('vote', ph === 'vote');
   $('vote').innerHTML = voteHtml(snap);
   show('steal-form', ph === 'steal' && imposter);
