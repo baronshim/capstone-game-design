@@ -59,12 +59,12 @@ export type ClueCheck =
   | { ok: true; clue: string }
   | { ok: false; code: 'clue-empty' | 'clue-one-word' | 'clue-too-long' | 'clue-is-word' | 'clue-taken'; message: string };
 
-export function validateClue(raw: string, word: string, priorClues: string[]): ClueCheck {
+export function validateClue(raw: string, word: string, priorClues: string[], checkSecret = true): ClueCheck {
   const clue = raw.trim();
   if (!clue) return { ok: false, code: 'clue-empty', message: 'Type a clue' };
   if (/\s/.test(clue)) return { ok: false, code: 'clue-one-word', message: 'One word only' };
   if (clue.length > MAX_CLUE_LENGTH) return { ok: false, code: 'clue-too-long', message: `Clues are at most ${MAX_CLUE_LENGTH} letters` };
-  if (isSecretWord(clue, word)) return { ok: false, code: 'clue-is-word', message: 'That is the word itself' };
+  if (checkSecret && isSecretWord(clue, word)) return { ok: false, code: 'clue-is-word', message: 'That is the word itself' };
   const norm = normalizeWord(clue);
   if (priorClues.some((p) => p !== '' && normalizeWord(p) === norm)) {
     return { ok: false, code: 'clue-taken', message: 'That clue was already given' };

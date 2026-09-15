@@ -30,7 +30,7 @@ export function redact(state: RoomState, viewerPlayerId: string | null): Snapsho
       ? null
       : {
           category: r.category,
-          word: reveal || (you !== undefined && !you.isImposter) ? r.word : null,
+          word: (reveal || (you !== undefined && !you.isImposter)) ? r.word : null,
           clueSeat: state.phase === 'clue' ? r.clueSeat : null,
           cluePass: r.cluePass,
           ejected: r.ejected,

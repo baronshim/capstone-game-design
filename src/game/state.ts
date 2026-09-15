@@ -199,7 +199,10 @@ function clue(state: RoomState, event: Extract<Event, { type: 'clue' }>): Result
   if (state.phase !== 'clue' || !state.round) return fail(state, event.playerId, 'wrong-phase', 'Clues are closed');
   if (state.round.clueSeat !== seat.index) return fail(state, event.playerId, 'not-your-turn', 'Wait for your turn');
   const prior = state.seats.flatMap((s) => s.clues);
-  const check = validateClue(event.word, state.round.word, prior);
+  // An imposter's clue skips the secret-word check: the check exists to stop the
+  // imposter from probing the category for free, and an imposter who says the
+  // word has simply outed themselves rather than exploited anything.
+  const check = validateClue(event.word, state.round.word, prior, !seat.isImposter);
   if (!check.ok) return fail(state, event.playerId, check.code, check.message);
   return ok(skipBotClues(recordClue(state, check.clue, event.at), event.at));
 }

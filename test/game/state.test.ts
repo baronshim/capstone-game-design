@@ -179,7 +179,9 @@ describe('clue', () => {
   });
 
   it('rejects out-of-turn, multi-word, secret-word, and repeated clues without advancing', () => {
-    const s0 = started();
+    // Seed 1: the first turn holder is crew, so the secret-word check below
+    // exercises the crew path (see the imposter carve-out tests further down).
+    const s0 = started(['Ada', 'Bob'], 1);
     const me = whoseTurn(s0);
     const other = me === 'p0' ? 'p1' : 'p0';
     expect(apply(s0, { type: 'clue', playerId: other, word: 'x', at: 1 }).effects[0].code).toBe('not-your-turn');
@@ -214,6 +216,31 @@ describe('clue', () => {
     expect(s.round!.cluePass).toBe(2);
     for (const seat of s.seats) expect(seat.clues).toHaveLength(2);
     expect(s.seats.filter((seat) => seat.kind === 'bot').every((seat) => seat.clues.every((c) => c === ''))).toBe(true);
+  });
+
+  it('rejects a crew clue that matches the secret word, leaving the state unchanged', () => {
+    let s = started(['Ada', 'Bob', 'Cal'], 42);
+    while (s.phase === 'clue' && s.seats[s.round!.clueSeat!].isImposter) {
+      s = apply(s, { type: 'timeout', at: 1 }).state;
+    }
+    expect(s.phase).toBe('clue'); // sanity: a crew turn was found before the round moved on
+    const me = whoseTurn(s);
+    const result = apply(s, { type: 'clue', playerId: me, word: s.round!.word, at: 2 });
+    expect(result.effects[0].code).toBe('clue-is-word');
+    expect(result.state).toBe(s);
+  });
+
+  it('accepts the imposter clueing the secret word, recording it and advancing the turn', () => {
+    let s = started(['Ada', 'Bob', 'Cal'], 42);
+    while (s.phase === 'clue' && !s.seats[s.round!.clueSeat!].isImposter) {
+      s = apply(s, { type: 'timeout', at: 1 }).state;
+    }
+    expect(s.phase).toBe('clue'); // sanity: the imposter's turn was found before the round moved on
+    const imp = s.seats[s.round!.clueSeat!];
+    const result = apply(s, { type: 'clue', playerId: imp.playerId!, word: s.round!.word, at: 2 });
+    expect(result.effects).toEqual([]);
+    expect(result.state.seats.find((seat) => seat.playerId === imp.playerId)!.clues).toEqual([s.round!.word]);
+    expect(result.state.phase !== 'clue' || result.state.round!.clueSeat !== imp.index).toBe(true);
   });
 });
 
