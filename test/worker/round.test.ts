@@ -102,6 +102,11 @@ describe('a round in the Room Durable Object', () => {
     expect(stealing.round!.ejected).toBe(impSeat);
     room.clients[room.imposterClientIndex].send({ type: 'steal', word: 'definitely-wrong' });
 
+    const calling = await room.clients[0].state((s) => s.phase === 'botcall');
+    expect(typeof calling.phaseEndsAt).toBe('number');
+    expect(calling.round!.result).toBeNull();
+    await room.fireAlarm();
+
     const reveal = await room.clients[0].state((s) => s.phase === 'reveal');
     expect(reveal.round).toMatchObject({ result: 'crew', stealGuess: 'definitely-wrong', ejected: impSeat });
     expect(typeof reveal.round!.word).toBe('string');
@@ -126,6 +131,7 @@ describe('a round in the Room Durable Object', () => {
     await room.fireAlarm();
     await room.clients[0].state((s) => s.phase === 'vote');
     await room.fireAlarm();
+    await room.fireAlarm();
     const reveal = await room.clients[0].state((s) => s.phase === 'reveal');
     expect(reveal.round).toMatchObject({ result: 'imposter', ejected: null });
   });
@@ -135,6 +141,7 @@ describe('a round in the Room Durable Object', () => {
     const imp = room.clients[room.imposterClientIndex];
     const word = room.snaps.find((_, i) => i !== room.imposterClientIndex)!.round!.word!;
     await playClues(room);
+    await room.fireAlarm();
     await room.fireAlarm();
     await room.fireAlarm();
     let leaked = false;

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { apply, createRoom, MAX_TRANSCRIPT, SEAT_COUNT, type RoomState } from '../../src/game/state';
 import { DURATIONS } from '../../src/game/rules';
 import { CATEGORIES } from '../../src/game/words';
+import type { BotCall } from '../../src/game/protocol';
 
 export function roomWith(names: string[]): RoomState {
   let state = createRoom('ABCD', 1000);
@@ -26,6 +27,12 @@ export function throughClues(state: RoomState, at = 2000): RoomState {
   return state;
 }
 
+/** Times out the bot-call phase, and only that, so a decided round reaches the reveal. */
+export function toReveal(state: RoomState, at = 9000): RoomState {
+  expect(state.phase).toBe('botcall');
+  return apply(state, { type: 'timeout', at }).state;
+}
+
 describe('createRoom', () => {
   it('starts empty in the lobby with no round', () => {
     expect(createRoom('ABCD', 1000)).toEqual({
@@ -40,7 +47,7 @@ describe('join', () => {
     expect(state.seats).toHaveLength(2);
     expect(state.seats[1]).toEqual({
       index: 1, kind: 'human', alias: null, playerId: 'p1', displayName: 'Bob', connected: true,
-      isImposter: false, clues: [], vote: null,
+      isImposter: false, clues: [], vote: null, botCalls: null, score: null,
     });
   });
 
@@ -334,8 +341,7 @@ describe('vote', () => {
     s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: c2.index, at: 1 }).state;
     s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c2.index, at: 2 }).state;
     s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: c1.index, at: 3 }).state;
-    expect(s.phase).toBe('reveal');
-    expect(s.phaseEndsAt).toBeNull();
+    expect(s.phase).toBe('botcall');
     expect(s.round!.ejected).toBe(c2.index);
     expect(s.round!.result).toBe('imposter');
   });
@@ -347,7 +353,7 @@ describe('vote', () => {
     t = apply(t, { type: 'vote', playerId: d1.playerId!, seat: imp.index, at: 1 }).state;
     t = apply(t, { type: 'vote', playerId: d2.playerId!, seat: d1.index, at: 2 }).state;
     t = apply(t, { type: 'timeout', at: 5 }).state;
-    expect(t.phase).toBe('reveal');
+    expect(t.phase).toBe('botcall');
     expect(t.round!.ejected).toBeNull();
     expect(t.round!.result).toBe('imposter');
   });
@@ -377,7 +383,7 @@ describe('steal', () => {
     const s0 = inSteal();
     const guess = ` ${s0.round!.word.toUpperCase()} `;
     const s1 = apply(s0, { type: 'steal', playerId: imposterOf(s0).playerId!, word: guess, at: 9 }).state;
-    expect(s1.phase).toBe('reveal');
+    expect(s1.phase).toBe('botcall');
     expect(s1.round!.result).toBe('imposter');
     expect(s1.round!.stealGuess).toBe(guess.trim());
   });
@@ -385,11 +391,11 @@ describe('steal', () => {
   it('a wrong guess or a timeout is a crew win', () => {
     const s0 = inSteal();
     const wrong = apply(s0, { type: 'steal', playerId: imposterOf(s0).playerId!, word: 'nope', at: 9 }).state;
-    expect(wrong.phase).toBe('reveal');
+    expect(wrong.phase).toBe('botcall');
     expect(wrong.round!.result).toBe('crew');
     expect(wrong.round!.stealGuess).toBe('nope');
     const late = apply(s0, { type: 'timeout', at: 9 }).state;
-    expect(late.phase).toBe('reveal');
+    expect(late.phase).toBe('botcall');
     expect(late.round!.result).toBe('crew');
     expect(late.round!.stealGuess).toBeNull();
   });
@@ -405,7 +411,7 @@ describe('steal', () => {
 describe('again', () => {
   it('returns humans to a fresh lobby, dropping bots, aliases, clues, votes, and the round', () => {
     const s0 = inSteal();
-    const done = apply(s0, { type: 'timeout', at: 1 }).state;
+    const done = toReveal(apply(s0, { type: 'timeout', at: 1 }).state);
     const s1 = apply(done, { type: 'again', playerId: 'p1', at: 2 }).state;
     expect(s1.phase).toBe('lobby');
     expect(s1.phaseEndsAt).toBeNull();
@@ -424,9 +430,91 @@ describe('again', () => {
   });
 });
 
+/** A round decided by a majority on a crew member: goes straight to the bot-call phase, no steal. */
+function decided(): RoomState {
+  let s = inVote();
+  const imp = imposterOf(s);
+  const [c1, c2] = crewOf(s);
+  s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: c2.index, at: 100 }).state;
+  s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: c1.index, at: 100 }).state;
+  s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c1.index, at: 100 }).state;
+  return s;
+}
+
+describe('bot-call phase', () => {
+  it('a decided round opens a 20s bot-call phase before the reveal and keeps the result on the round', () => {
+    const s = decided();
+    expect(s.phase).toBe('botcall');
+    expect(s.phaseEndsAt).toBe(100 + DURATIONS.botcall);
+    expect(s.round!.ejected).toBe(crewOf(inVote())[0].index);
+    expect(s.round!.result).toBe('imposter');
+    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null)).toBe(true);
+  });
+
+  it('records a human\'s calls, forces the entry for their own seat to null, and rejects malformed calls', () => {
+    const s0 = decided();
+    const [c1] = crewOf(s0);
+    const calls: BotCall[] = s0.seats.map((seat) => seat.kind);
+    const r = apply(s0, { type: 'botcall', playerId: c1.playerId!, calls, at: 200 });
+    expect(r.effects).toEqual([]);
+    expect(r.state.phase).toBe('botcall');
+    const mine = r.state.seats[c1.index].botCalls!;
+    expect(mine[c1.index]).toBeNull();
+    expect(mine.filter((c) => c !== null)).toHaveLength(SEAT_COUNT - 1);
+    expect(apply(s0, { type: 'botcall', playerId: c1.playerId!, calls: ['bot'], at: 200 }).effects[0].code).toBe('bad-botcall');
+    const junk = calls.map(() => 'maybe') as unknown as BotCall[];
+    expect(apply(s0, { type: 'botcall', playerId: c1.playerId!, calls: junk, at: 200 }).effects[0].code).toBe('bad-botcall');
+    expect(apply(inVote(), { type: 'botcall', playerId: c1.playerId!, calls, at: 200 }).effects[0].code).toBe('wrong-phase');
+    expect(apply(s0, { type: 'botcall', playerId: 'ghost', calls, at: 200 }).effects[0].code).toBe('not-seated');
+  });
+
+  it('reveals once every connected human has called, scoring one point per correct call on another seat', () => {
+    let s = decided();
+    const humans = s.seats.filter((seat) => seat.kind === 'human');
+    const perfect: BotCall[] = s.seats.map((seat) => seat.kind);
+    const allBots: BotCall[] = s.seats.map(() => 'bot');
+    s = apply(s, { type: 'botcall', playerId: humans[0].playerId!, calls: perfect, at: 200 }).state;
+    s = apply(s, { type: 'botcall', playerId: humans[1].playerId!, calls: allBots, at: 201 }).state;
+    expect(s.phase).toBe('botcall');
+    s = apply(s, { type: 'botcall', playerId: humans[2].playerId!, calls: s.seats.map(() => null), at: 202 }).state;
+    expect(s.phase).toBe('reveal');
+    expect(s.phaseEndsAt).toBeNull();
+    expect(s.seats[humans[0].index].score).toBe(5);
+    expect(s.seats[humans[1].index].score).toBe(3);
+    expect(s.seats[humans[2].index].score).toBe(0);
+    expect(s.seats.filter((seat) => seat.kind === 'bot').every((seat) => seat.score === null)).toBe(true);
+  });
+
+  it('a disconnected human does not hold the phase open, and a timeout reveals with 0 for humans who never called', () => {
+    let s = decided();
+    const humans = s.seats.filter((seat) => seat.kind === 'human');
+    s = apply(s, { type: 'disconnect', playerId: humans[2].playerId! }).state;
+    s = apply(s, { type: 'botcall', playerId: humans[0].playerId!, calls: s.seats.map(() => 'bot'), at: 200 }).state;
+    expect(s.phase).toBe('botcall');
+    s = apply(s, { type: 'botcall', playerId: humans[1].playerId!, calls: s.seats.map(() => 'bot'), at: 201 }).state;
+    expect(s.phase).toBe('reveal');
+    expect(s.seats[humans[2].index].score).toBe(0);
+
+    const t = apply(decided(), { type: 'timeout', at: 300 }).state;
+    expect(t.phase).toBe('reveal');
+    expect(t.seats.filter((seat) => seat.kind === 'human').every((seat) => seat.score === 0)).toBe(true);
+  });
+
+  it('play again drops humans still disconnected and resets calls and scores', () => {
+    let s = apply(decided(), { type: 'timeout', at: 300 }).state;
+    const humans = s.seats.filter((seat) => seat.kind === 'human');
+    s = apply(s, { type: 'disconnect', playerId: humans[1].playerId! }).state;
+    s = apply(s, { type: 'again', playerId: humans[0].playerId!, at: 400 }).state;
+    expect(s.phase).toBe('lobby');
+    expect(s.seats.map((seat) => seat.playerId).sort()).toEqual([humans[0].playerId, humans[2].playerId].sort());
+    expect(s.seats.map((seat) => seat.index)).toEqual([0, 1]);
+    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null)).toBe(true);
+  });
+});
+
 describe('timeout in untimed phases', () => {
   it('is a no-op at the reveal', () => {
-    const done = apply(inSteal(), { type: 'timeout', at: 1 }).state;
+    const done = toReveal(apply(inSteal(), { type: 'timeout', at: 1 }).state);
     expect(apply(done, { type: 'timeout', at: 2 }).state).toBe(done);
   });
 });

@@ -41,17 +41,21 @@ function inSteal(): RoomState {
   return s;
 }
 
-function inReveal(): RoomState {
+function inBotcall(): RoomState {
   const s = inSteal();
   return apply(s, { type: 'steal', playerId: imposterOf(s).playerId!, word: 'nope', at: 50 }).state;
 }
 
+function inReveal(): RoomState {
+  return apply(inBotcall(), { type: 'timeout', at: 60 }).state;
+}
+
 const HUMANS = ['p0', 'p1', 'p2'];
 /** Fields that must never reach a viewer about another seat before the reveal. */
-const OTHER_SEAT_SECRETS = ['playerId', 'kind', 'isImposter', 'displayName', 'vote'];
+const OTHER_SEAT_SECRETS = ['playerId', 'kind', 'isImposter', 'displayName', 'vote', 'botCalls', 'score'];
 
 describe('redact before the reveal', () => {
-  const phases = { clue: inClue, chat: inChat, vote: inVote, steal: inSteal };
+  const phases = { clue: inClue, chat: inChat, vote: inVote, steal: inSteal, botcall: inBotcall };
 
   it.each(Object.entries(phases))('in the %s phase never exposes identity fields of other seats', (_name, make) => {
     const state = make();
@@ -63,6 +67,8 @@ describe('redact before the reveal', () => {
       }
       expect(JSON.stringify(snap)).not.toContain('"playerId"');
       expect(snap.round!.stealGuess).toBeNull();
+      expect(snap.round!.result).toBeNull();
+      expect(snap.autopilot).toBe(false);
     }
   });
 
@@ -141,6 +147,34 @@ describe('redact at the reveal', () => {
         if (real.kind === 'human') expect(seat.displayName).toBe(real.displayName);
       }
       expect(JSON.stringify(snap)).not.toContain('"playerId"');
+    }
+  });
+});
+
+describe('redact during the bot call and at the reveal', () => {
+  it('echoes your own locked calls back to you and to nobody else, with the result still hidden', () => {
+    let s = inBotcall();
+    const caller = s.seats.find((seat) => seat.kind === 'human')!;
+    const calls = s.seats.map((seat) => (seat.index === caller.index ? null : 'bot' as const));
+    s = apply(s, { type: 'botcall', playerId: caller.playerId!, calls, at: 55 }).state;
+    expect(s.phase).toBe('botcall');
+    const own = redact(s, caller.playerId!);
+    expect(own.seats[caller.index].botCalls).toEqual(calls);
+    expect(own.round!.result).toBeNull();
+    for (const id of HUMANS) {
+      if (id === caller.playerId) continue;
+      const snap = redact(s, id);
+      expect(snap.seats[caller.index]).not.toHaveProperty('botCalls');
+      expect(snap.seats[snap.you!].botCalls).toBeNull();
+    }
+  });
+
+  it('exposes the result and every seat\'s score at the reveal', () => {
+    const s = inReveal();
+    const snap = redact(s, 'p0');
+    expect(snap.round!.result).toBe('crew');
+    for (const seat of snap.seats) {
+      expect(seat.score).toBe(seat.kind === 'human' ? 0 : null);
     }
   });
 });

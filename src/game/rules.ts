@@ -1,5 +1,5 @@
 import type { Rng } from './aliases';
-import type { SeatKind } from './protocol';
+import type { BotCall, SeatKind } from './protocol';
 
 /** Phase lengths in milliseconds (spec 2.3). */
 export const DURATIONS = {
@@ -7,6 +7,7 @@ export const DURATIONS = {
   chat: 90_000,
   vote: 20_000,
   steal: 15_000,
+  botcall: 20_000,
 } as const;
 
 /**
@@ -32,4 +33,12 @@ export function resolveVote(votes: (number | null)[]): number | null {
 export function isStealCorrect(guess: string, word: string): boolean {
   const g = guess.trim().toLowerCase();
   return g.length > 0 && g === word.trim().toLowerCase();
+}
+
+/** One point per other seat called correctly (spec 2.4); a null entry or a missing call scores nothing. */
+export function scoreBotCalls(calls: BotCall[] | null, seats: { index: number; kind: SeatKind }[], self: number): number {
+  if (!calls) return 0;
+  let score = 0;
+  for (const s of seats) if (s.index !== self && calls[s.index] === s.kind) score++;
+  return score;
 }

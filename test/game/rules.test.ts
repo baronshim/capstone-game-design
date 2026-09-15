@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { chooseImposter, DURATIONS, isStealCorrect, resolveVote } from '../../src/game/rules';
+import { chooseImposter, DURATIONS, isStealCorrect, resolveVote, scoreBotCalls } from '../../src/game/rules';
 import { seededRng } from '../../src/game/aliases';
 
 describe('DURATIONS', () => {
   it('matches the spec', () => {
-    expect(DURATIONS).toEqual({ clueTurn: 20_000, chat: 90_000, vote: 20_000, steal: 15_000 });
+    expect(DURATIONS).toEqual({ clueTurn: 20_000, chat: 90_000, vote: 20_000, steal: 15_000, botcall: 20_000 });
   });
 });
 
@@ -58,5 +58,24 @@ describe('isStealCorrect', () => {
     expect(isStealCorrect('  Pizza ', 'pizza')).toBe(true);
     expect(isStealCorrect('pizzas', 'pizza')).toBe(false);
     expect(isStealCorrect('', 'pizza')).toBe(false);
+  });
+});
+
+describe('scoreBotCalls', () => {
+  const seats = [
+    { index: 0, kind: 'human' as const },
+    { index: 1, kind: 'bot' as const },
+    { index: 2, kind: 'bot' as const },
+    { index: 3, kind: 'human' as const },
+  ];
+
+  it('scores one point per other seat called correctly and ignores the caller\'s own entry', () => {
+    expect(scoreBotCalls(['bot', 'bot', 'bot', 'human'], seats, 0)).toBe(3);
+    expect(scoreBotCalls(['human', 'bot', 'human', 'bot'], seats, 0)).toBe(1);
+  });
+
+  it('treats null entries and a missing call as zero', () => {
+    expect(scoreBotCalls([null, null, null, null], seats, 0)).toBe(0);
+    expect(scoreBotCalls(null, seats, 0)).toBe(0);
   });
 });

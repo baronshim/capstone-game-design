@@ -5,7 +5,7 @@ import type { RoundView, SeatView, Snapshot } from './protocol';
  * The only path from room state to a client. Before the reveal, other seats
  * expose only alias, connection state, public clues, and whether they have
  * voted; the imposter never receives the word. At the reveal everything but
- * playerId is public.
+ * playerId is public, including the result and each human's bot-call score.
  */
 export function redact(state: RoomState, viewerPlayerId: string | null): Snapshot {
   const you = viewerPlayerId === null ? undefined : state.seats.find((s) => s.playerId === viewerPlayerId);
@@ -21,6 +21,8 @@ export function redact(state: RoomState, viewerPlayerId: string | null): Snapsho
       view.isImposter = s.isImposter;
     }
     if (reveal) view.vote = s.vote;
+    if (mine) view.botCalls = s.botCalls;
+    if (reveal) view.score = s.score;
     return view;
   });
 
@@ -35,7 +37,7 @@ export function redact(state: RoomState, viewerPlayerId: string | null): Snapsho
           cluePass: r.cluePass,
           ejected: r.ejected,
           stealGuess: reveal ? r.stealGuess : null,
-          result: r.result,
+          result: reveal ? r.result : null,
         };
 
   return {
@@ -46,5 +48,6 @@ export function redact(state: RoomState, viewerPlayerId: string | null): Snapsho
     seats,
     transcript: state.transcript,
     round,
+    autopilot: false,
   };
 }

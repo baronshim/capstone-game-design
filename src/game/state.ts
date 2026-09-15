@@ -1,7 +1,7 @@
-import type { ChatLine, Outcome, Phase, SeatKind } from './protocol';
+import type { BotCall, ChatLine, Outcome, Phase, SeatKind } from './protocol';
 import { makeAliases, seededRng, shuffle } from './aliases';
 import { pickWord, validateClue } from './words';
-import { chooseImposter, DURATIONS, isStealCorrect, resolveVote } from './rules';
+import { chooseImposter, DURATIONS, isStealCorrect, resolveVote, scoreBotCalls } from './rules';
 
 export const SEAT_COUNT = 6;
 export const MAX_CHAT_LENGTH = 280;
@@ -19,6 +19,10 @@ export interface Seat {
   /** One entry per clue pass; '' means the turn passed with no clue. */
   clues: string[];
   vote: number | null;
+  /** The human's Human/Bot call per seat index, locked in during the bot-call phase; null until then and for bots. */
+  botCalls: BotCall[] | null;
+  /** Correct bot calls this round, computed at the reveal; null for bots and before the reveal. */
+  score: number | null;
 }
 
 export interface Round {
@@ -53,6 +57,7 @@ export type Event =
   | { type: 'vote'; playerId: string; seat: number; at: number }
   | { type: 'steal'; playerId: string; word: string; at: number }
   | { type: 'again'; playerId: string; at: number }
+  | { type: 'botcall'; playerId: string; calls: BotCall[]; at: number }
   | { type: 'timeout'; at: number };
 
 export type Effect = { type: 'error'; to: string; code: string; message: string };
@@ -86,6 +91,8 @@ export function apply(state: RoomState, event: Event): Result {
       return steal(state, event);
     case 'again':
       return again(state, event);
+    case 'botcall':
+      return botcall(state, event);
     case 'timeout':
       return timeout(state, event);
   }
@@ -122,6 +129,8 @@ function join(state: RoomState, event: Extract<Event, { type: 'join' }>): Result
     isImposter: false,
     clues: [],
     vote: null,
+    botCalls: null,
+    score: null,
   };
   return ok({ ...state, seats: [...state.seats, seat] });
 }
@@ -149,7 +158,17 @@ function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Resu
   const rng = seededRng(event.seed);
   const filled: Seat[] = [...state.seats];
   while (filled.length < SEAT_COUNT) {
-    filled.push({ index: filled.length, kind: 'bot', alias: null, connected: true, isImposter: false, clues: [], vote: null });
+    filled.push({
+      index: filled.length,
+      kind: 'bot',
+      alias: null,
+      connected: true,
+      isImposter: false,
+      clues: [],
+      vote: null,
+      botCalls: null,
+      score: null,
+    });
   }
   const aliases = makeAliases(SEAT_COUNT, rng);
   const order = shuffle(filled.map((_, i) => i), rng);
@@ -160,6 +179,8 @@ function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Resu
     isImposter: false,
     clues: [],
     vote: null,
+    botCalls: null,
+    score: null,
   }));
   const { category, word } = pickWord(rng);
   const imposter = chooseImposter(seats, rng);
@@ -211,16 +232,31 @@ function enterVote(state: RoomState, at: number): RoomState {
   return { ...state, phase: 'vote', phaseEndsAt: at + DURATIONS.vote, seats: state.seats.map((s) => ({ ...s, vote: null })) };
 }
 
-function finish(state: RoomState, result: Outcome): RoomState {
-  return { ...state, phase: 'reveal', phaseEndsAt: null, round: { ...state.round!, result } };
+/** The round is decided: humans get 20s to call every seat Human or Bot before the reveal (spec 2.3.5). */
+function finish(state: RoomState, result: Outcome, at: number): RoomState {
+  return { ...state, phase: 'botcall', phaseEndsAt: at + DURATIONS.botcall, round: { ...state.round!, result } };
+}
+
+/** Scores every human's calls and opens the untimed reveal. */
+function reveal(state: RoomState): RoomState {
+  const seats = state.seats.map((s) => ({
+    ...s,
+    score: s.kind === 'human' ? scoreBotCalls(s.botCalls, state.seats, s.index) : null,
+  }));
+  return { ...state, phase: 'reveal', phaseEndsAt: null, seats };
+}
+
+/** Every human who can still call has: disconnected humans do not hold the phase open. */
+function callsComplete(seats: Seat[]): boolean {
+  return seats.every((s) => s.kind !== 'human' || !s.connected || s.botCalls !== null);
 }
 
 function closeVote(state: RoomState, at: number): RoomState {
   const ejected = resolveVote(state.seats.map((s) => s.vote));
   const withEjected: RoomState = { ...state, round: { ...state.round!, ejected } };
-  if (ejected === null || !state.seats[ejected].isImposter) return finish(withEjected, 'imposter');
+  if (ejected === null || !state.seats[ejected].isImposter) return finish(withEjected, 'imposter', at);
   // A bot imposter has nobody to make the steal guess (M3 gives bots one).
-  if (state.seats[ejected].kind === 'bot') return finish(withEjected, 'crew');
+  if (state.seats[ejected].kind === 'bot') return finish(withEjected, 'crew', at);
   return { ...withEjected, phase: 'steal', phaseEndsAt: at + DURATIONS.steal };
 }
 
@@ -244,7 +280,22 @@ function steal(state: RoomState, event: Extract<Event, { type: 'steal' }>): Resu
   if (!seat.isImposter) return fail(state, event.playerId, 'not-imposter', 'Only the imposter can steal');
   const guess = event.word.trim().slice(0, 40);
   const result: Outcome = isStealCorrect(guess, state.round!.word) ? 'imposter' : 'crew';
-  return ok(finish({ ...state, round: { ...state.round!, stealGuess: guess } }, result));
+  return ok(finish({ ...state, round: { ...state.round!, stealGuess: guess } }, result, event.at));
+}
+
+function botcall(state: RoomState, event: Extract<Event, { type: 'botcall' }>): Result {
+  const seat = seatOf(state, event.playerId);
+  if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
+  if (state.phase !== 'botcall') return fail(state, event.playerId, 'wrong-phase', 'Bot calls are closed');
+  const valid =
+    Array.isArray(event.calls) &&
+    event.calls.length === state.seats.length &&
+    event.calls.every((c) => c === 'human' || c === 'bot' || c === null);
+  if (!valid) return fail(state, event.playerId, 'bad-botcall', 'Call every seat Human, Bot, or leave it blank');
+  const calls = event.calls.map((c, i) => (i === seat.index ? null : c));
+  const seats = state.seats.map((s) => (s.index === seat.index ? { ...s, botCalls: calls } : s));
+  const next = { ...state, seats };
+  return ok(callsComplete(seats) ? reveal(next) : next);
 }
 
 function again(state: RoomState, event: Extract<Event, { type: 'again' }>): Result {
@@ -252,8 +303,8 @@ function again(state: RoomState, event: Extract<Event, { type: 'again' }>): Resu
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
   if (state.phase !== 'reveal') return fail(state, event.playerId, 'wrong-phase', 'The round is still going');
   const seats = state.seats
-    .filter((s) => s.kind === 'human')
-    .map((s, index) => ({ ...s, index, alias: null, isImposter: false, clues: [], vote: null }));
+    .filter((s) => s.kind === 'human' && s.connected)
+    .map((s, index) => ({ ...s, index, alias: null, isImposter: false, clues: [], vote: null, botCalls: null, score: null }));
   return ok({ ...state, phase: 'lobby', phaseEndsAt: null, seats, transcript: [], round: null });
 }
 
@@ -266,7 +317,9 @@ function timeout(state: RoomState, event: Extract<Event, { type: 'timeout' }>): 
     case 'vote':
       return ok(closeVote(state, event.at));
     case 'steal':
-      return ok(finish(state, 'crew'));
+      return ok(finish(state, 'crew', event.at));
+    case 'botcall':
+      return ok(reveal(state));
     default:
       return ok(state);
   }
