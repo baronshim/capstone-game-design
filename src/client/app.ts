@@ -1,5 +1,5 @@
-import type { ClientMessage, ServerMessage, Snapshot } from '../game/protocol';
-import { cardHtml, logHtml, revealHtml, seatsHtml, turnHtml, voteHtml } from './views';
+import type { BotCall, ClientMessage, Phase, ServerMessage, Snapshot } from '../game/protocol';
+import { botcallHtml, cardHtml, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -21,6 +21,9 @@ let retries = 0;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 /** The viewer's own clue count as of the last render, to detect a new turn reusing the same box. */
 let lastClueCount = 0;
+/** The viewer's unsent Human/Bot picks during the bot call, reset whenever the phase changes. */
+let pendingCalls: BotCall[] = [];
+let lastPhase: Phase | null = null;
 
 function showError(message: string): void {
   $('error').textContent = message;
@@ -90,10 +93,16 @@ function render(): void {
   const imposter = seated && snap.seats[snap.you as number].isImposter === true;
   const chatOpen = ph === 'lobby' || ph === 'chat' || ph === 'reveal';
 
+  if (ph !== lastPhase) {
+    pendingCalls = snap.seats.map(() => null);
+    lastPhase = ph;
+  }
+
   $('home').hidden = true;
   $('room').hidden = false;
   $('room-code').textContent = snap.code;
-  $('phase').textContent = ph;
+  $('phase').textContent = PHASE_LABELS[ph];
+  show('notice', snap.autopilot);
 
   show('card', snap.round !== null && ph !== 'lobby');
   $('card').innerHTML = cardHtml(snap);
@@ -112,6 +121,9 @@ function render(): void {
   $('vote').innerHTML = voteHtml(snap);
   show('steal-form', ph === 'steal' && imposter);
   show('steal-wait', ph === 'steal' && !imposter);
+  show('botcall', ph === 'botcall' && seated);
+  $('botcall').innerHTML = ph === 'botcall' ? botcallHtml(snap, pendingCalls) : '';
+  show('lock-calls', ph === 'botcall' && seated && snap.seats[snap.you as number].botCalls === null);
   show('reveal', ph === 'reveal');
   $('reveal').innerHTML = revealHtml(snap);
   show('again', ph === 'reveal' && seated);
@@ -164,6 +176,15 @@ $('vote').onclick = (e) => {
   const button = (e.target as HTMLElement).closest('button');
   if (button?.dataset.seat !== undefined) send({ type: 'vote', seat: Number(button.dataset.seat) });
 };
+
+$('botcall').onclick = (e) => {
+  const button = (e.target as HTMLElement).closest('button');
+  if (!button || button.disabled || button.dataset.seat === undefined) return;
+  pendingCalls[Number(button.dataset.seat)] = button.dataset.call === 'human' ? 'human' : 'bot';
+  render();
+};
+
+$('lock-calls').onclick = () => send({ type: 'botcall', calls: pendingCalls });
 
 const nameInput = $<HTMLInputElement>('name');
 const savedName = localStorage.getItem('name');
