@@ -55,7 +55,10 @@ All phases show a visible countdown.
    (20s per turn). Forbidden: the secret word itself (case-insensitive,
    plus simple plural/stem match) and any clue already given this round. A
    rejected clue returns an error and the timer continues. Timeout submits
-   nothing, shown publicly as "(no clue)".
+   nothing, shown publicly as "(no clue)". The imposter's clue skips the
+   secret-word check (decided 2026-09-15): the imposter cannot knowingly say
+   the word, and rejecting it would turn the error code into a word oracle.
+   An imposter who happens to say the word has simply outed themselves.
 2. **Interrogation, 90s.** Open free chat. Each player has one **question
    token** per round. Spending it posts a menu question at a target seat:
    - "Are you the imposter?"
@@ -70,6 +73,8 @@ All phases show a visible countdown.
    truth) with a private message, and the timer continues. Timeout
    auto-answers per role. The question and its answer are posted to chat
    for everyone. Only one question may be pending at a time; others queue.
+   The question menu ships in milestone 4; until then interrogation is open
+   chat only and bots do not ask.
 3. **Vote, 20s.** Every seat votes for one seat (not self). Bots vote too.
    Majority (strictly more than half of votes cast) is ejected. Otherwise,
    including ties, nobody is ejected. Abstentions do not count as votes.
@@ -138,21 +143,33 @@ test/
 
 **Key boundary.** `src/game` is pure: no I/O, no timers, no network. The
 reducer takes a state and an event and returns the new state plus a list of
-effects (`broadcast`, `sendTo(seat)`, `setAlarm(at)`, `botTurn(seat, action)`).
-The Durable Object executes effects. This keeps rules unit-testable without
+effects. As built in m2 and m3 the effects are `error {to, code, message}`
+and `botTurn {seat, action, delayMs}`; snapshots are broadcast after every
+event rather than requested by an effect, and the phase deadline lives on
+the state as `phaseEndsAt`, which the Durable Object mirrors into its single
+alarm. The Durable Object executes effects. This keeps rules unit-testable without
 Cloudflare and lets bots be tested with a fake API.
 
 **Bots are server-side only.** Bot seats have no socket. The Room DO turns
-`botTurn` effects into calls into `bots.ts`, which produces an event that
-is fed back into the reducer exactly as a client message would be.
+`botTurn` effects into calls into `bots.ts`, which produces a bot event
+(`botClue`, `botChat`, `botVote`, `botSteal`, keyed by seat) that is fed back
+into the reducer through the same inner functions as the human events. Bot
+delays (typing time, jittered chat ticks, vote delays) are `setTimeout`
+calls inside the Durable Object, all shorter than the phase they belong to;
+the single alarm is reserved for phase deadlines. If the object is evicted
+mid-phase the pending bot timers are lost and those bots stay silent for the
+rest of that phase; the phase alarm still advances the round.
 
 **Deployment.** `wrangler dev` locally (LAN access for the class demo),
 `wrangler deploy` to a free `*.workers.dev` URL. Bots run on Cloudflare
-Workers AI through the `env.AI` binding declared in `wrangler.toml`, so
+Workers AI through the `env.AI` binding declared in `wrangler.jsonc`, so
 the deployment holds no API key or secret of any kind. Environment flags:
-`BOT_MODE=fake|live` (default `fake`) and `BOT_MODEL` (default
-`@cf/google/gemma-4-26b-it`, or whatever the current Workers AI catalog
-name for Gemma 4 26B is at implementation time).
+`BOT_MODE=fake|scripted|live` (default `fake`) and `BOT_MODEL` (default
+`@cf/google/gemma-4-26b-a4b-it`, verified in the Workers AI catalog on
+2026-09-15). The AI binding is remote-only: `wrangler dev` needs a one-time
+`wrangler login`, and the vitest pool cannot start with the binding present,
+so `wrangler.jsonc` defines a `test` environment without it and
+`vitest.config.ts` selects that environment (verified 2026-09-15).
 
 ## 4. Protocol and state
 
@@ -174,26 +191,30 @@ Round { category, word, currentClueSeat, cluePass: 1|2,
 
 Client to server:
 `join {playerId, displayName}`, `start`, `clue {word}`, `chat {text}`,
-`ask {target, questionId, refSeat?}`, `answer {yes}`, `vote {seat}`,
-`steal {word}`, `botcall {calls}`, `again`.
+`ask {target, questionId, refSeat?}` (m4), `answer {yes}` (m4),
+`vote {seat}`, `steal {word}`, `botcall {calls}`, `again`.
 
 Server to client:
-`state {snapshot}` (redacted for this viewer), `chat {line}`,
-`error {code, message}`, `reveal {fullState}`.
+`state {snapshot}` (redacted for this viewer, sent to every seated socket
+after every event, including timeouts and bot actions) and
+`error {code, message}`. The snapshot carries the transcript, so there is
+no separate `chat` message, and the reveal is the same snapshot with every
+field exposed, so there is no separate `reveal` message (as built in m2).
 
 ### 4.3 Redaction
 
 `redact(state, viewerSeat)` is the only path from room state to a client.
 It removes: other seats' roles, imposter flags, kinds, personas, playerIds,
-and the word for the imposter. Reveal sends the full state only after the
-round has ended. Redaction is unit-tested by asserting a leaked-field
+and the word for the imposter. At the reveal the same snapshot exposes
+everything. Redaction is unit-tested by asserting a leaked-field
 checklist against every phase.
 
 ### 4.4 Timers
 
 Each phase sets a DO alarm for `phaseEndsAt`. On alarm the reducer applies
 a `timeout` event (skip clue, auto-answer, close votes, close bot calls) and
-advances. Bot chat ticks and question-answer deadlines use short alarms.
+advances. Bot chat ticks and vote delays are short `setTimeout`s inside the
+Durable Object (see section 3); question-answer deadlines (m4) use the alarm.
 
 ### 4.5 Failure handling
 
@@ -202,12 +223,17 @@ advances. Bot chat ticks and question-answer deadlines use short alarms.
   from a per-category fallback list; for chat it stays silent; for votes
   it uses the rule-based vote below.
 - Daily Workers AI allocation exhausted (calls start failing with a quota
-  error): the room switches to the scripted backend for the rest of the
-  day and the lobby shows "bots are on autopilot today".
+  error): the room stores an autopilot flag until midnight UTC, uses the
+  scripted backend until then, and the lobby shows "bots are on autopilot
+  today".
 - Human disconnects mid-round: seat stays, marked disconnected, timeouts
-  handle their turns. No bot replacement mid-round.
+  handle their turns. No bot replacement mid-round. The vote closes as soon
+  as every connected human has voted. Seats still disconnected when Play
+  Again is pressed are dropped so they cannot fill the room.
 - No humans connected for 10 minutes: room deletes itself.
 - Start with 0 humans: refused.
+- Room creation is limited to 5 rooms per minute per client IP, counted in
+  Worker memory (best effort, resets when the isolate restarts).
 - Per-room budget of 40 live API calls per round. Over budget, bots go
   silent in chat and use rule-based votes (vote for the seat with the most
   accusations against it, else random non-self).
@@ -218,7 +244,8 @@ advances. Bot chat ticks and question-answer deadlines use short alarms.
 
 At round start each bot seat gets a persona: typing habits (case,
 punctuation, length), mood, a hobby or two for small talk, and a secret
-"tell it is hiding". Personas are drawn from a small hand-written pool.
+"tell it is hiding". Personas are drawn from a small hand-written pool using the round seed, so
+a round is reproducible from its seed.
 
 ### 5.2 Actions and schemas
 
@@ -232,7 +259,7 @@ fails validation is treated as a failed call.
 |---|---|---|
 | Clue | word or category, prior clues, role, persona | `{ clue: string }` |
 | Chat line | public transcript, persona, private role info, style sheet | `{ say: string \| null }` |
-| Ask question | transcript, suspicions, remaining token | `{ target, questionId, refSeat? } \| null` |
+| Ask question (m4) | transcript, suspicions, remaining token | `{ target, questionId, refSeat? } \| null` |
 | Vote | transcript, clues | `{ vote: seat }` |
 | Steal guess | clues seen | `{ word: string }` |
 | Bot call | not needed; bots do not score | none |
@@ -269,11 +296,14 @@ Workers Free plan), needs no secret on the public Worker, and cannot run up
 a bill: past the daily allocation calls fail and the scripted backend takes
 over.
 
-Default model is Gemma 4 26B, about 15 neurons per bot call at roughly
-1,500 input and 40 output tokens, so around 650 calls or 20 to 30 full
-rounds per day. `BOT_MODEL` overrides it. Each call uses the JSON schema
-response format, a `max_tokens` of 80, and a temperature around 0.8 for
-chat and 0.3 for votes and clues.
+Default model is Gemma 4 26B (`@cf/google/gemma-4-26b-a4b-it`), about 15
+neurons per bot call at roughly 1,500 input and 40 output tokens, so around
+650 calls or 20 to 30 full rounds per day. `BOT_MODEL` overrides it. Each
+call uses the JSON schema `response_format`, `max_completion_tokens` of 80,
+and a temperature around 0.8 for chat and 0.3 for votes and clues. Gemma 4's
+thinking mode is off unless requested, and no reasoning parameter is sent.
+A call that has not returned after 5 seconds is abandoned (the promise is
+raced against a timer; the binding has no cancel) and counts as failed.
 
 Three `BotBackend` implementations, selected by `BOT_MODE`:
 
@@ -343,9 +373,10 @@ Each milestone ends in a playable build tagged `m1` through `m4`.
 2. **Week 2, Imposter round.** Word lists, imposter assignment, clue phase
    with timers, vote, steal, reveal. No bots, no Knight/Knave.
 3. **Week 3, bots.** Bot seats fill the room, fake mode then Workers AI
-   calls for clue, chat, ask, vote, steal, with the scripted backend as
-   fallback. Output validation. Mimicry style sheet. Bot-call phase and
-   scoring. Deploy to `workers.dev`.
+   calls for clue, chat, vote, steal, with the scripted backend as
+   fallback (asking questions waits for the menu in week 4). Output
+   validation. Mimicry style sheet. The imposter can be a bot. Bot-call
+   phase and scoring. Rate-limited room creation. Deploy to `workers.dev`.
 4. **Week 4, Knights and Knaves plus polish.** Roles, question menu,
    enforced Yes/No answers, timeout auto-answers, reveal shows roles. Then
    sound cue on questions, reveal animation, mobile layout pass, budget
