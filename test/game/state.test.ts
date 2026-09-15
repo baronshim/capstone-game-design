@@ -240,3 +240,166 @@ describe('disconnect', () => {
     expect(apply(state, { type: 'disconnect', playerId: 'nobody' }).state).toEqual(state);
   });
 });
+
+/** Three humans so a 2-vote majority can eject. Returns the state at the start of the vote phase. */
+function inVote(seed = 42): RoomState {
+  const inChat = throughClues(started(['Ada', 'Bob', 'Cal'], seed));
+  return apply(inChat, { type: 'timeout', at: 10_000 }).state;
+}
+
+function imposterOf(state: RoomState) {
+  return state.seats.find((s) => s.isImposter)!;
+}
+
+function crewOf(state: RoomState) {
+  return state.seats.filter((s) => s.kind === 'human' && !s.isImposter);
+}
+
+describe('chat phase timeout', () => {
+  it('opens a 20s vote with every vote cleared', () => {
+    const s = inVote();
+    expect(s.phase).toBe('vote');
+    expect(s.phaseEndsAt).toBe(10_000 + DURATIONS.vote);
+    expect(s.seats.every((seat) => seat.vote === null)).toBe(true);
+  });
+});
+
+describe('vote', () => {
+  it('records a vote for another seat and allows changing it until the phase closes', () => {
+    const s0 = inVote();
+    const [c1, c2] = crewOf(s0);
+    const s1 = apply(s0, { type: 'vote', playerId: c1.playerId!, seat: c2.index, at: 1 }).state;
+    expect(s1.seats[c1.index].vote).toBe(c2.index);
+    expect(s1.phase).toBe('vote');
+    const target = imposterOf(s0).index;
+    const s2 = apply(s1, { type: 'vote', playerId: c1.playerId!, seat: target, at: 2 }).state;
+    expect(s2.seats[c1.index].vote).toBe(target);
+  });
+
+  it('rejects self-votes, out-of-range seats, non-integers, and votes outside the vote phase', () => {
+    const s0 = inVote();
+    const [c1] = crewOf(s0);
+    expect(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: c1.index, at: 1 }).effects[0].code).toBe('bad-vote');
+    expect(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: 6, at: 1 }).effects[0].code).toBe('bad-vote');
+    expect(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: 1.5, at: 1 }).effects[0].code).toBe('bad-vote');
+    expect(apply(started(), { type: 'vote', playerId: 'p0', seat: 1, at: 1 }).effects[0].code).toBe('wrong-phase');
+    expect(apply(s0, { type: 'vote', playerId: 'ghost', seat: 1, at: 1 }).effects[0].code).toBe('not-seated');
+  });
+
+  it('closes as soon as every human has voted; a majority on the imposter opens a 15s steal', () => {
+    let s = inVote();
+    const imp = imposterOf(s);
+    const [c1, c2] = crewOf(s);
+    s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: imp.index, at: 1 }).state;
+    s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: imp.index, at: 2 }).state;
+    expect(s.phase).toBe('vote');
+    s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c1.index, at: 3000 }).state;
+    expect(s.phase).toBe('steal');
+    expect(s.phaseEndsAt).toBe(3000 + DURATIONS.steal);
+    expect(s.round!.ejected).toBe(imp.index);
+    expect(s.round!.result).toBeNull();
+  });
+
+  it('a majority on a crew member ends the round as an imposter win', () => {
+    let s = inVote();
+    const imp = imposterOf(s);
+    const [c1, c2] = crewOf(s);
+    s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: c2.index, at: 1 }).state;
+    s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c2.index, at: 2 }).state;
+    s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: c1.index, at: 3 }).state;
+    expect(s.phase).toBe('reveal');
+    expect(s.phaseEndsAt).toBeNull();
+    expect(s.round!.ejected).toBe(c2.index);
+    expect(s.round!.result).toBe('imposter');
+  });
+
+  it('timeout with a split vote ejects nobody and the imposter wins', () => {
+    let t = inVote();
+    const imp = imposterOf(t);
+    const [d1, d2] = crewOf(t);
+    t = apply(t, { type: 'vote', playerId: d1.playerId!, seat: imp.index, at: 1 }).state;
+    t = apply(t, { type: 'vote', playerId: d2.playerId!, seat: d1.index, at: 2 }).state;
+    t = apply(t, { type: 'timeout', at: 5 }).state;
+    expect(t.phase).toBe('reveal');
+    expect(t.round!.ejected).toBeNull();
+    expect(t.round!.result).toBe('imposter');
+  });
+
+  it('timeout with a single vote cast treats it as a majority of one', () => {
+    let s = inVote();
+    const [c1] = crewOf(s);
+    s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: imposterOf(s).index, at: 1 }).state;
+    s = apply(s, { type: 'timeout', at: 5 }).state;
+    expect(s.phase).toBe('steal');
+    expect(s.round!.ejected).toBe(imposterOf(s).index);
+  });
+});
+
+/** State in the steal phase with the imposter ejected. */
+function inSteal(seed = 42): RoomState {
+  let s = inVote(seed);
+  const imp = imposterOf(s);
+  for (const c of crewOf(s)) s = apply(s, { type: 'vote', playerId: c.playerId!, seat: imp.index, at: 1 }).state;
+  s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: crewOf(s)[0].index, at: 2 }).state;
+  expect(s.phase).toBe('steal');
+  return s;
+}
+
+describe('steal', () => {
+  it('an exact guess flips the round to an imposter win', () => {
+    const s0 = inSteal();
+    const guess = ` ${s0.round!.word.toUpperCase()} `;
+    const s1 = apply(s0, { type: 'steal', playerId: imposterOf(s0).playerId!, word: guess, at: 9 }).state;
+    expect(s1.phase).toBe('reveal');
+    expect(s1.round!.result).toBe('imposter');
+    expect(s1.round!.stealGuess).toBe(guess.trim());
+  });
+
+  it('a wrong guess or a timeout is a crew win', () => {
+    const s0 = inSteal();
+    const wrong = apply(s0, { type: 'steal', playerId: imposterOf(s0).playerId!, word: 'nope', at: 9 }).state;
+    expect(wrong.phase).toBe('reveal');
+    expect(wrong.round!.result).toBe('crew');
+    expect(wrong.round!.stealGuess).toBe('nope');
+    const late = apply(s0, { type: 'timeout', at: 9 }).state;
+    expect(late.phase).toBe('reveal');
+    expect(late.round!.result).toBe('crew');
+    expect(late.round!.stealGuess).toBeNull();
+  });
+
+  it('only the imposter may steal, and only during the steal phase', () => {
+    const s0 = inSteal();
+    const crew = crewOf(s0)[0];
+    expect(apply(s0, { type: 'steal', playerId: crew.playerId!, word: 'x', at: 1 }).effects[0].code).toBe('not-imposter');
+    expect(apply(inVote(), { type: 'steal', playerId: 'p0', word: 'x', at: 1 }).effects[0].code).toBe('wrong-phase');
+  });
+});
+
+describe('again', () => {
+  it('returns humans to a fresh lobby, dropping bots, aliases, clues, votes, and the round', () => {
+    const s0 = inSteal();
+    const done = apply(s0, { type: 'timeout', at: 1 }).state;
+    const s1 = apply(done, { type: 'again', playerId: 'p1', at: 2 }).state;
+    expect(s1.phase).toBe('lobby');
+    expect(s1.phaseEndsAt).toBeNull();
+    expect(s1.round).toBeNull();
+    expect(s1.transcript).toEqual([]);
+    expect(s1.seats.map((s) => s.playerId).sort()).toEqual(['p0', 'p1', 'p2']);
+    expect(s1.seats.map((s) => s.index)).toEqual([0, 1, 2]);
+    for (const seat of s1.seats) {
+      expect(seat).toMatchObject({ kind: 'human', alias: null, isImposter: false, clues: [], vote: null });
+    }
+    expect(apply(s1, { type: 'start', playerId: 'p0', at: 3, seed: 5 }).state.phase).toBe('clue');
+  });
+
+  it('is rejected before the reveal', () => {
+    expect(apply(inVote(), { type: 'again', playerId: 'p0', at: 1 }).effects[0].code).toBe('wrong-phase');
+  });
+});
+
+describe('timeout in untimed phases', () => {
+  it('is a no-op at the reveal', () => {
+    const done = apply(inSteal(), { type: 'timeout', at: 1 }).state;
+    expect(apply(done, { type: 'timeout', at: 2 }).state).toBe(done);
+  });
+});

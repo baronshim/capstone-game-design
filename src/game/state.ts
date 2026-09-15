@@ -1,7 +1,7 @@
 import type { ChatLine, Outcome, Phase, SeatKind } from './protocol';
 import { makeAliases, seededRng, shuffle } from './aliases';
 import { pickWord, validateClue } from './words';
-import { chooseImposter, DURATIONS } from './rules';
+import { chooseImposter, DURATIONS, isStealCorrect, resolveVote } from './rules';
 
 export const SEAT_COUNT = 6;
 export const MAX_CHAT_LENGTH = 280;
@@ -204,28 +204,66 @@ function clue(state: RoomState, event: Extract<Event, { type: 'clue' }>): Result
   return ok(skipBotClues(recordClue(state, check.clue, event.at), event.at));
 }
 
+function enterVote(state: RoomState, at: number): RoomState {
+  return { ...state, phase: 'vote', phaseEndsAt: at + DURATIONS.vote, seats: state.seats.map((s) => ({ ...s, vote: null })) };
+}
+
+function finish(state: RoomState, result: Outcome): RoomState {
+  return { ...state, phase: 'reveal', phaseEndsAt: null, round: { ...state.round!, result } };
+}
+
+function closeVote(state: RoomState, at: number): RoomState {
+  const ejected = resolveVote(state.seats.map((s) => s.vote));
+  const withEjected: RoomState = { ...state, round: { ...state.round!, ejected } };
+  if (ejected === null || !state.seats[ejected].isImposter) return finish(withEjected, 'imposter');
+  // A bot imposter has nobody to make the steal guess (M3 gives bots one).
+  if (state.seats[ejected].kind === 'bot') return finish(withEjected, 'crew');
+  return { ...withEjected, phase: 'steal', phaseEndsAt: at + DURATIONS.steal };
+}
+
 function vote(state: RoomState, event: Extract<Event, { type: 'vote' }>): Result {
   const seat = seatOf(state, event.playerId);
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
-  return fail(state, event.playerId, 'wrong-phase', 'Voting is closed');
+  if (state.phase !== 'vote') return fail(state, event.playerId, 'wrong-phase', 'Voting is closed');
+  if (!Number.isInteger(event.seat) || event.seat < 0 || event.seat >= state.seats.length || event.seat === seat.index) {
+    return fail(state, event.playerId, 'bad-vote', 'Vote for another seat');
+  }
+  const seats = state.seats.map((s) => (s.index === seat.index ? { ...s, vote: event.seat } : s));
+  const next = { ...state, seats };
+  const allIn = seats.every((s) => s.kind !== 'human' || s.vote !== null);
+  return ok(allIn ? closeVote(next, event.at) : next);
 }
 
 function steal(state: RoomState, event: Extract<Event, { type: 'steal' }>): Result {
   const seat = seatOf(state, event.playerId);
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
-  return fail(state, event.playerId, 'wrong-phase', 'No steal in progress');
+  if (state.phase !== 'steal') return fail(state, event.playerId, 'wrong-phase', 'No steal in progress');
+  if (!seat.isImposter) return fail(state, event.playerId, 'not-imposter', 'Only the imposter can steal');
+  const guess = event.word.trim().slice(0, 40);
+  const result: Outcome = isStealCorrect(guess, state.round!.word) ? 'imposter' : 'crew';
+  return ok(finish({ ...state, round: { ...state.round!, stealGuess: guess } }, result));
 }
 
 function again(state: RoomState, event: Extract<Event, { type: 'again' }>): Result {
   const seat = seatOf(state, event.playerId);
   if (!seat) return fail(state, event.playerId, 'not-seated', 'Join the room first');
-  return fail(state, event.playerId, 'wrong-phase', 'The round is still going');
+  if (state.phase !== 'reveal') return fail(state, event.playerId, 'wrong-phase', 'The round is still going');
+  const seats = state.seats
+    .filter((s) => s.kind === 'human')
+    .map((s, index) => ({ ...s, index, alias: null, isImposter: false, clues: [], vote: null }));
+  return ok({ ...state, phase: 'lobby', phaseEndsAt: null, seats, transcript: [], round: null });
 }
 
 function timeout(state: RoomState, event: Extract<Event, { type: 'timeout' }>): Result {
   switch (state.phase) {
     case 'clue':
       return ok(skipBotClues(recordClue(state, '', event.at), event.at));
+    case 'chat':
+      return ok(enterVote(state, event.at));
+    case 'vote':
+      return ok(closeVote(state, event.at));
+    case 'steal':
+      return ok(finish(state, 'crew'));
     default:
       return ok(state);
   }
