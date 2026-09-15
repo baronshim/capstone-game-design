@@ -155,7 +155,7 @@ export class RoomObject extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as Attachment;
       for (const effect of result.effects) {
-        if (effect.to === att.playerId) {
+        if (effect.type === 'error' && effect.to === att.playerId) {
           this.send(ws, { type: 'error', code: effect.code, message: effect.message });
         }
       }

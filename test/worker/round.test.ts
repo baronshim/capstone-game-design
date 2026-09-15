@@ -34,6 +34,8 @@ async function startedRoom() {
   for (let attempt = 0; attempt < 20; attempt++) {
     const room = await startedRoomOnce();
     if (room.imposterClientIndex >= 0) return room;
+    // A discarded room's sockets would otherwise stay open until afterEach, leaking a pending DO alarm past this test.
+    for (const c of room.clients) c.ws.close(1000, 'retry');
   }
   throw new Error('no room with a human imposter in 20 tries');
 }
