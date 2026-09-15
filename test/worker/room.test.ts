@@ -72,6 +72,31 @@ describe('Room Durable Object', () => {
     expect(await late.error()).toBe('room-started');
   });
 
+  it('rejects hostile frames without crashing', async () => {
+    const code = await createRoom();
+
+    // A fresh socket that has never joined: the JSON/shape guards run before the
+    // join check, so both malformed frames still come back as bad-json.
+    const fresh = await connect(code);
+    fresh.ws.send('not json');
+    expect(await fresh.error()).toBe('bad-json');
+    fresh.ws.send('[]');
+    expect(await fresh.error()).toBe('bad-json');
+    fresh.ws.send(JSON.stringify({ type: 'chat', text: 'x' }));
+    expect(await fresh.error()).toBe('not-joined');
+
+    const { a } = await lobbyWithTwo();
+    a.send({ type: 'nope' });
+    expect(await a.error()).toBe('unknown-type');
+    a.send({ type: 'vote', seat: 99 });
+    expect(await a.error()).toBe('wrong-phase');
+
+    // The room and this socket are still alive after all of the above.
+    a.send({ type: 'chat', text: 'still here' });
+    const seen = await a.state((s) => s.transcript.some((l) => l.text === 'still here'));
+    expect(seen.transcript.some((l) => l.text === 'still here')).toBe(true);
+  });
+
   it('deletes an empty room when its alarm fires', async () => {
     const code = await createRoom();
     const a = await connect(code);

@@ -61,7 +61,7 @@ export class RoomObject extends DurableObject<Env> {
       this.send(ws, { type: 'error', code: 'bad-json', message: 'Malformed message' });
       return;
     }
-    if (parsed === null || typeof parsed !== 'object') {
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       this.send(ws, { type: 'error', code: 'bad-json', message: 'Malformed message' });
       return;
     }
@@ -125,6 +125,12 @@ export class RoomObject extends DurableObject<Env> {
    * with nobody connected the room deletes itself.
    */
   async alarm(): Promise<void> {
+    // The DO has exactly one alarm slot, and syncAlarm() overwrites it after every
+    // dispatch to mirror the reducer's current phaseEndsAt (or the empty-room TTL
+    // when idle). The input gate also serialises this handler with message
+    // handlers, so an alarm that fires always belongs to the phase that is still
+    // current when it runs. Tests rely on this to fire phases early with
+    // runDurableObjectAlarm instead of waiting out the real deadline.
     if (this.state && this.state.phaseEndsAt !== null) {
       await this.dispatch({ type: 'timeout', at: Date.now() });
       return;
@@ -132,6 +138,10 @@ export class RoomObject extends DurableObject<Env> {
     if (this.ctx.getWebSockets().length === 0) {
       await this.ctx.storage.deleteAll();
       this.state = null;
+    } else {
+      // Untimed phase with sockets still connected: nothing to fire and no TTL to
+      // arm, but re-arm anyway so the DO is never left without a live alarm.
+      await this.syncAlarm();
     }
   }
 
