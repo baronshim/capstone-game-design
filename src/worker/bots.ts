@@ -4,6 +4,7 @@ import { isSecretWord, validateClue } from '../game/words';
 import { type BotContext, type BotInputs, MAX_BOT_LINE, personaFor, styleSheet } from './prompts';
 import { ScriptedBackend } from './backends/scripted';
 import { FakeBackend } from './backends/fake';
+import { DEFAULT_MODEL, WorkersAiBackend, type AiLike } from './backends/workersAi';
 
 /** One bot action through one backend (spec 5.2). */
 export interface BotBackend {
@@ -164,9 +165,15 @@ export function nextUtcMidnight(now: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
 }
 
-/** Picks the primary backend from BOT_MODE. `live` is wired up with the Workers AI backend in a later task and behaves as scripted until then. */
+/** Picks the primary backend from BOT_MODE: `fake` canned, `live` Workers AI (scripted if the binding is missing), anything else scripted. */
 export function makeRunner(env: Env, hooks: Pick<RunnerOptions, 'onAutopilot' | 'onFallback'> = {}): BotRunner {
   const scripted = new ScriptedBackend();
-  const primary: BotBackend = env.BOT_MODE === 'fake' ? new FakeBackend() : scripted;
+  let primary: BotBackend = scripted;
+  if (env.BOT_MODE === 'fake') {
+    primary = new FakeBackend();
+  } else if (env.BOT_MODE === 'live') {
+    if (env.AI) primary = new WorkersAiBackend(env.AI as AiLike, env.BOT_MODEL ?? DEFAULT_MODEL);
+    else console.warn('BOT_MODE=live but there is no AI binding; bots run scripted');
+  }
   return new BotRunner(primary, scripted, { budgetPerRound: DEFAULT_BUDGET, timeoutMs: DEFAULT_TIMEOUT_MS, now: Date.now, ...hooks });
 }

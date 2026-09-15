@@ -5,7 +5,8 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "build:client": "esbuild src/client/app.ts --bundle --format=esm --outfile=public/app.js",
-    "dev": "npm run build:client && wrangler dev --ip 0.0.0.0",
+    "dev": "npm run build:client && wrangler dev --ip 0.0.0.0 --var BOT_MODE:fake",
+    "dev:live": "npm run build:client && wrangler dev --ip 0.0.0.0",
     "deploy": "npm run build:client && wrangler deploy",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
