@@ -29,7 +29,7 @@ export class RoomObject extends DurableObject<Env> {
         this.state = createRoom(url.searchParams.get('code') ?? '????', Date.now());
         await this.save();
       }
-      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+      await this.syncAlarm();
       return Response.json({ created });
     }
 
@@ -66,8 +66,8 @@ export class RoomObject extends DurableObject<Env> {
       return;
     }
     const msg = parsed as ClientMessage;
-
     const att = ws.deserializeAttachment() as Attachment;
+    const at = Date.now();
     let event: Event;
 
     if (msg.type === 'join') {
@@ -76,14 +76,22 @@ export class RoomObject extends DurableObject<Env> {
         return;
       }
       ws.serializeAttachment({ playerId: msg.playerId } satisfies Attachment);
-      event = { type: 'join', playerId: msg.playerId, displayName: String(msg.displayName ?? ''), at: Date.now() };
+      event = { type: 'join', playerId: msg.playerId, displayName: String(msg.displayName ?? ''), at };
     } else if (!att.playerId) {
       this.send(ws, { type: 'error', code: 'not-joined', message: 'Send join first' });
       return;
     } else if (msg.type === 'chat') {
-      event = { type: 'chat', playerId: att.playerId, text: String(msg.text ?? ''), at: Date.now() };
+      event = { type: 'chat', playerId: att.playerId, text: String(msg.text ?? ''), at };
     } else if (msg.type === 'start') {
-      event = { type: 'start', playerId: att.playerId, at: Date.now(), seed: crypto.getRandomValues(new Uint32Array(1))[0] };
+      event = { type: 'start', playerId: att.playerId, at, seed: crypto.getRandomValues(new Uint32Array(1))[0] };
+    } else if (msg.type === 'clue') {
+      event = { type: 'clue', playerId: att.playerId, word: String(msg.word ?? ''), at };
+    } else if (msg.type === 'vote') {
+      event = { type: 'vote', playerId: att.playerId, seat: Number(msg.seat), at };
+    } else if (msg.type === 'steal') {
+      event = { type: 'steal', playerId: att.playerId, word: String(msg.word ?? ''), at };
+    } else if (msg.type === 'again') {
+      event = { type: 'again', playerId: att.playerId, at };
     } else {
       this.send(ws, { type: 'error', code: 'unknown-type', message: 'Unknown message type' });
       return;
@@ -104,17 +112,23 @@ export class RoomObject extends DurableObject<Env> {
       const stillOpen = others.some((o) => (o.deserializeAttachment() as Attachment).playerId === att.playerId);
       if (!stillOpen) await this.dispatch({ type: 'disconnect', playerId: att.playerId });
     }
-    if (others.length === 0) {
-      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
-    }
+    await this.syncAlarm();
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
     await this.webSocketClose(ws, 1011, 'error');
   }
 
-  /** Fires 10 minutes after the last socket closed. Deletes the room if still empty. */
+  /**
+   * One alarm slot, two jobs. During a timed phase the alarm is the phase
+   * deadline and fires a `timeout` event. Otherwise it is the empty-room TTL:
+   * with nobody connected the room deletes itself.
+   */
   async alarm(): Promise<void> {
+    if (this.state && this.state.phaseEndsAt !== null) {
+      await this.dispatch({ type: 'timeout', at: Date.now() });
+      return;
+    }
     if (this.ctx.getWebSockets().length === 0) {
       await this.ctx.storage.deleteAll();
       this.state = null;
@@ -126,6 +140,7 @@ export class RoomObject extends DurableObject<Env> {
     const result = apply(this.state, event);
     this.state = result.state;
     await this.save();
+    await this.syncAlarm();
 
     for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as Attachment;
@@ -137,6 +152,18 @@ export class RoomObject extends DurableObject<Env> {
       const seated = att.playerId !== null && this.state.seats.some((s) => s.playerId === att.playerId);
       if (!seated) continue;
       this.send(ws, { type: 'state', snapshot: redact(this.state, att.playerId) });
+    }
+  }
+
+  /** Mirrors the reducer's deadline into the DO alarm, or arms the deletion TTL when idle and empty. */
+  private async syncAlarm(): Promise<void> {
+    if (!this.state) return;
+    if (this.state.phaseEndsAt !== null) {
+      await this.ctx.storage.setAlarm(this.state.phaseEndsAt);
+    } else if (this.ctx.getWebSockets().length === 0) {
+      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+    } else {
+      await this.ctx.storage.deleteAlarm();
     }
   }
 

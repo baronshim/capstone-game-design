@@ -36,7 +36,7 @@ describe('Room Durable Object', () => {
     a.send({ type: 'chat', text: 'lobby talk' });
     await b.state((s) => s.transcript.length === 1);
     a.send({ type: 'start' });
-    const started = await b.state((s) => s.phase !== 'lobby');
+    const started = await b.state((s) => s.phase === 'clue');
     expect(started.seats).toHaveLength(6);
     expect(started.seats.every((s) => typeof s.alias === 'string')).toBe(true);
     expect(started.transcript).toEqual([]);
