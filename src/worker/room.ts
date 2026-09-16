@@ -1,10 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './env';
-import { apply, createRoom, type Event, type RoomState } from '../game/state';
+import { apply, createRoom, type BotTurn, type Event, type RoomState } from '../game/state';
 import { redact } from '../game/redact';
 import type { ClientMessage, ServerMessage } from '../game/protocol';
+import { type BotRunner, makeRunner } from './bots';
 
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
+/** Typing-time simulation for bot chat (spec 5.5): 40ms per character, at most 4s. */
+const TYPING_MS_PER_CHAR = 40;
+const MAX_TYPING_MS = 4000;
 
 interface Attachment {
   playerId: string | null;
@@ -12,11 +16,22 @@ interface Attachment {
 
 export class RoomObject extends DurableObject<Env> {
   private state: RoomState | null = null;
+  private readonly runner: BotRunner;
+  /** Dispatches run one at a time so a bot timer never interleaves with a socket message mid-apply. */
+  private queue: Promise<void> = Promise.resolve();
+  /** Fake bots act at once so tests and local play do not wait out the jitter. */
+  private readonly instant: boolean;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.instant = env.BOT_MODE === 'fake';
+    this.runner = makeRunner(env, {
+      onAutopilot: (until) => void ctx.storage.put('autopilotUntil', until),
+      onFallback: (action, reason) => console.warn(`bot ${action} fell back to scripted: ${reason}`),
+    });
     ctx.blockConcurrencyWhile(async () => {
       this.state = (await ctx.storage.get<RoomState>('state')) ?? null;
+      this.runner.autopilotUntil = (await ctx.storage.get<number>('autopilotUntil')) ?? 0;
     });
   }
 
@@ -90,6 +105,9 @@ export class RoomObject extends DurableObject<Env> {
       event = { type: 'vote', playerId: att.playerId, seat: Number(msg.seat), at };
     } else if (msg.type === 'steal') {
       event = { type: 'steal', playerId: att.playerId, word: String(msg.word ?? ''), at };
+    } else if (msg.type === 'botcall') {
+      const calls = Array.isArray(msg.calls) ? msg.calls : [];
+      event = { type: 'botcall', playerId: att.playerId, calls: calls.map((c) => (c === 'human' || c === 'bot' ? c : null)), at };
     } else if (msg.type === 'again') {
       event = { type: 'again', playerId: att.playerId, at };
     } else {
@@ -139,29 +157,59 @@ export class RoomObject extends DurableObject<Env> {
       await this.ctx.storage.deleteAll();
       this.state = null;
     } else {
-      // Untimed phase with sockets still connected: nothing to fire and no TTL to
-      // arm, but re-arm anyway so the DO is never left without a live alarm.
+      // Untimed phase with sockets still connected: nothing to fire; syncAlarm
+      // takes its deleteAlarm branch here, which is the correct resting state.
       await this.syncAlarm();
     }
   }
 
-  private async dispatch(event: Event): Promise<void> {
+  private dispatch(event: Event): Promise<void> {
+    const run = this.queue.then(() => this.dispatchNow(event));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async dispatchNow(event: Event): Promise<void> {
     if (!this.state) return;
     const result = apply(this.state, event);
     this.state = result.state;
     await this.save();
     await this.syncAlarm();
 
+    for (const effect of result.effects) {
+      if (effect.type === 'botTurn') this.scheduleBot(effect);
+    }
     for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as Attachment;
       for (const effect of result.effects) {
-        if (effect.to === att.playerId) {
+        if (effect.type === 'error' && effect.to === att.playerId) {
           this.send(ws, { type: 'error', code: effect.code, message: effect.message });
         }
       }
       const seated = att.playerId !== null && this.state.seats.some((s) => s.playerId === att.playerId);
       if (!seated) continue;
-      this.send(ws, { type: 'state', snapshot: redact(this.state, att.playerId) });
+      this.send(ws, { type: 'state', snapshot: { ...redact(this.state, att.playerId), autopilot: this.runner.autopilot } });
+    }
+  }
+
+  /** Runs a bot turn after its delay. The turn remembers its round, so one from an earlier round is dropped. */
+  private scheduleBot(turn: BotTurn): void {
+    const seed = this.state?.round?.seed;
+    if (seed === undefined) return;
+    setTimeout(() => void this.runBot(turn, seed), this.instant ? 0 : turn.delayMs);
+  }
+
+  private async runBot(turn: BotTurn, seed: number): Promise<void> {
+    try {
+      if (!this.state?.round || this.state.round.seed !== seed) return;
+      const event = await this.runner.turn(this.state, turn);
+      if (!event) return;
+      if (event.type === 'botChat' && !this.instant) {
+        await new Promise((r) => setTimeout(r, Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length)));
+      }
+      await this.dispatch(event);
+    } catch (err) {
+      console.warn(`bot ${turn.action} for seat ${turn.seat} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

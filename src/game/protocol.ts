@@ -1,7 +1,9 @@
-export type Phase = 'lobby' | 'clue' | 'chat' | 'vote' | 'steal' | 'reveal';
+export type Phase = 'lobby' | 'clue' | 'chat' | 'vote' | 'steal' | 'botcall' | 'reveal';
 export type SeatKind = 'human' | 'bot';
 /** Who won the round. */
 export type Outcome = 'crew' | 'imposter';
+/** A human's call on one seat during the bot-call phase; null is no call. */
+export type BotCall = SeatKind | null;
 
 export interface ChatLine {
   seat: number;
@@ -26,6 +28,10 @@ export interface SeatView {
   isImposter?: boolean;
   /** Present only at the reveal. */
   vote?: number | null;
+  /** Present only for your own seat: the calls you locked in this round, or null. */
+  botCalls?: BotCall[] | null;
+  /** Present only at the reveal: correct calls this round for a human, null for a bot. */
+  score?: number | null;
 }
 
 export interface RoundView {
@@ -38,6 +44,7 @@ export interface RoundView {
   ejected: number | null;
   /** Present only at the reveal. */
   stealGuess: string | null;
+  /** Present only at the reveal. */
   result: Outcome | null;
 }
 
@@ -51,6 +58,8 @@ export interface Snapshot {
   seats: SeatView[];
   transcript: ChatLine[];
   round: RoundView | null;
+  /** True when the daily AI allocation is used up and bots run on the scripted backend. */
+  autopilot: boolean;
 }
 
 export type ClientMessage =
@@ -60,6 +69,7 @@ export type ClientMessage =
   | { type: 'clue'; word: string }
   | { type: 'vote'; seat: number }
   | { type: 'steal'; word: string }
+  | { type: 'botcall'; calls: BotCall[] }
   | { type: 'again' };
 
 export type ServerMessage =

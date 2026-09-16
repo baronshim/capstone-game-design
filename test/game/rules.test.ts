@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { chooseImposter, DURATIONS, isStealCorrect, resolveVote } from '../../src/game/rules';
+import { chooseImposter, DURATIONS, isStealCorrect, resolveVote, scoreBotCalls } from '../../src/game/rules';
 import { seededRng } from '../../src/game/aliases';
 
 describe('DURATIONS', () => {
   it('matches the spec', () => {
-    expect(DURATIONS).toEqual({ clueTurn: 20_000, chat: 90_000, vote: 20_000, steal: 15_000 });
+    expect(DURATIONS).toEqual({ clueTurn: 20_000, chat: 90_000, vote: 20_000, steal: 15_000, botcall: 20_000 });
   });
 });
 
@@ -18,14 +18,10 @@ describe('chooseImposter', () => {
     { index: 5, kind: 'human' as const },
   ];
 
-  it('only ever picks a human seat (M2) and reaches every human across seeds', () => {
+  it('picks any of the six seats, bots included, and reaches every seat across seeds', () => {
     const picked = new Set<number>();
-    for (let seed = 1; seed <= 40; seed++) {
-      const i = chooseImposter(seats, seededRng(seed));
-      expect(seats[i].kind).toBe('human');
-      picked.add(i);
-    }
-    expect(picked).toEqual(new Set([1, 3, 5]));
+    for (let seed = 1; seed <= 60; seed++) picked.add(chooseImposter(seats, seededRng(seed)));
+    expect(picked).toEqual(new Set([0, 1, 2, 3, 4, 5]));
   });
 
   it('is deterministic for a seed', () => {
@@ -58,5 +54,24 @@ describe('isStealCorrect', () => {
     expect(isStealCorrect('  Pizza ', 'pizza')).toBe(true);
     expect(isStealCorrect('pizzas', 'pizza')).toBe(false);
     expect(isStealCorrect('', 'pizza')).toBe(false);
+  });
+});
+
+describe('scoreBotCalls', () => {
+  const seats = [
+    { index: 0, kind: 'human' as const },
+    { index: 1, kind: 'bot' as const },
+    { index: 2, kind: 'bot' as const },
+    { index: 3, kind: 'human' as const },
+  ];
+
+  it('scores one point per other seat called correctly and ignores the caller\'s own entry', () => {
+    expect(scoreBotCalls(['bot', 'bot', 'bot', 'human'], seats, 0)).toBe(3);
+    expect(scoreBotCalls(['human', 'bot', 'human', 'bot'], seats, 0)).toBe(1);
+  });
+
+  it('treats null entries and a missing call as zero', () => {
+    expect(scoreBotCalls([null, null, null, null], seats, 0)).toBe(0);
+    expect(scoreBotCalls(null, seats, 0)).toBe(0);
   });
 });

@@ -6,7 +6,8 @@
   "scripts": {
     "build:client": "esbuild src/client/app.ts --bundle --format=esm --outfile=public/app.js",
     "dev": "npm run build:client && wrangler dev --ip 0.0.0.0",
-    "deploy": "npm run build:client && wrangler deploy",
+    "dev:live": "npm run build:client && wrangler dev --ip 0.0.0.0 --env production",
+    "deploy": "npm run build:client && wrangler deploy --env production",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
     "smoke": "node scripts/smoke.mjs"

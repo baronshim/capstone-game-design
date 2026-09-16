@@ -29,6 +29,10 @@
     .line b { margin-right: 6px; }
     table { width: 100%; border-collapse: collapse; margin: 8px 0; }
     td, th { text-align: left; padding: 4px; border-bottom: 1px solid #8884; }
+    .notice { opacity: 0.75; font-size: 0.9em; }
+    #botcall .seat { justify-content: space-between; }
+    .callbtns { display: flex; gap: 4px; }
+    #botcall button.on { font-weight: bold; text-decoration: underline; }
     .error { color: #c33; min-height: 1.2em; }
   </style>
 </head>
@@ -46,6 +50,7 @@
 
     <section id="room" hidden>
       <h2>Room <span id="room-code"></span> <small id="phase"></small> <span id="timer" class="timer"></span></h2>
+      <p id="notice" class="notice" hidden>Bots are on autopilot today: the daily AI budget is used up, so they play by script.</p>
       <div id="card" class="card" hidden></div>
       <div id="seats"></div>
       <button id="start" hidden>Start</button>
@@ -60,6 +65,8 @@
         <button>Steal</button>
       </form>
       <p id="steal-wait" hidden>The imposter was caught and is guessing the word…</p>
+      <div id="botcall" hidden></div>
+      <button id="lock-calls" hidden>Lock in calls</button>
       <div id="reveal" hidden></div>
       <button id="again" hidden>Play again</button>
       <div id="log" hidden></div>

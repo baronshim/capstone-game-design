@@ -1,4 +1,4 @@
-import type { Snapshot } from '../game/protocol';
+import type { BotCall, Phase, Snapshot } from '../game/protocol';
 
 export function esc(s: string): string {
   return s.replace(
@@ -10,6 +10,35 @@ export function esc(s: string): string {
 export function nameOf(snap: Snapshot, seat: number): string {
   const s = snap.seats[seat];
   return s?.alias ?? s?.displayName ?? `Seat ${seat + 1}`;
+}
+
+/** Short phase names for the header. */
+export const PHASE_LABELS: Record<Phase, string> = {
+  lobby: 'lobby',
+  clue: 'clues',
+  chat: 'chat',
+  vote: 'vote',
+  steal: 'steal',
+  botcall: 'bot call',
+  reveal: 'reveal',
+};
+
+/** Human/Bot toggles for every other seat. Shows the viewer's unsent `pending` picks until the server echoes locked-in calls. */
+export function botcallHtml(snap: Snapshot, pending: BotCall[]): string {
+  const me = snap.you;
+  if (me === null) return '';
+  const locked = snap.seats[me].botCalls ?? null;
+  const calls = locked ?? pending;
+  const rows = snap.seats
+    .filter((s) => s.index !== me)
+    .map((s) => {
+      const button = (call: 'human' | 'bot', label: string) =>
+        `<button data-seat="${s.index}" data-call="${call}" class="${calls[s.index] === call ? 'on' : ''}"${locked ? ' disabled' : ''}>${label}</button>`;
+      return `<div class="seat"><span>${esc(nameOf(snap, s.index))}</span><span class="callbtns">${button('human', 'Human')}${button('bot', 'Bot')}</span></div>`;
+    })
+    .join('');
+  const head = locked ? '<p>Calls locked in. Waiting for the others…</p>' : '<p>Who is human and who is a bot? One point per correct call.</p>';
+  return head + rows;
 }
 
 export function cardHtml(snap: Snapshot): string {
@@ -61,7 +90,12 @@ export function revealHtml(snap: Snapshot): string {
       return `<tr><td>${esc(s.alias ?? '')}</td><td>${who}</td><td>${s.isImposter ? 'Imposter' : ''}</td><td>${voted}</td></tr>`;
     })
     .join('');
-  return `<h3>${headline}</h3><p>${ejected}${steal} The word was <b>${esc(r.word ?? '')}</b>.</p><table><tr><th>Alias</th><th>Who</th><th></th><th>Voted for</th></tr>${rows}</table>`;
+  const scores = snap.seats
+    .filter((s) => s.kind === 'human' && s.score !== null && s.score !== undefined)
+    .map((s) => `${esc(s.displayName ?? nameOf(snap, s.index))} ${s.score}/${snap.seats.length - 1}`)
+    .join(', ');
+  const calls = scores ? `<p>Bot calls: ${scores}</p>` : '';
+  return `<h3>${headline}</h3><p>${ejected}${steal} The word was <b>${esc(r.word ?? '')}</b>.</p><table><tr><th>Alias</th><th>Who</th><th></th><th>Voted for</th></tr>${rows}</table>${calls}`;
 }
 
 export function logHtml(snap: Snapshot): string {

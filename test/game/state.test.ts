@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { apply, createRoom, MAX_TRANSCRIPT, SEAT_COUNT, type RoomState } from '../../src/game/state';
+import { apply, createRoom, MAX_CHAT_LENGTH, MAX_TRANSCRIPT, SEAT_COUNT, type BotTurn, type Result, type RoomState } from '../../src/game/state';
+import type { Effect, Event } from '../../src/game/state';
 import { DURATIONS } from '../../src/game/rules';
 import { CATEGORIES } from '../../src/game/words';
+import type { BotCall } from '../../src/game/protocol';
+
+/** The code of the first error effect, if any; `Effect` is a union with `BotTurn` so `.code` needs narrowing. */
+function errorCode(effects: Effect[]): string | undefined {
+  return effects.find((e): e is Extract<Effect, { type: 'error' }> => e.type === 'error')?.code;
+}
 
 export function roomWith(names: string[]): RoomState {
   let state = createRoom('ABCD', 1000);
@@ -15,6 +22,25 @@ export function started(names = ['Ada', 'Bob'], seed = 42): RoomState {
   return apply(roomWith(names), { type: 'start', playerId: 'p0', at: 1000, seed }).state;
 }
 
+const NAMES3 = ['Ada', 'Bob', 'Cal'];
+
+/** First seed from 1 whose started room satisfies `pred`, so tests do not depend on how the RNG is consumed. */
+export function seedFor(names: string[], pred: (s: RoomState) => boolean): number {
+  for (let seed = 1; seed < 1000; seed++) if (pred(started(names, seed))) return seed;
+  throw new Error('no seed satisfies the predicate');
+}
+
+export const humanImposter = (s: RoomState) => s.seats.find((x) => x.isImposter)!.kind === 'human';
+export const botImposter = (s: RoomState) => !humanImposter(s);
+
+/** Passes bot turns with timeouts until a human is on turn or the clue phase ends. */
+export function toHumanTurn(state: RoomState, at = 2000): RoomState {
+  while (state.phase === 'clue' && state.seats[state.round!.clueSeat!].kind === 'bot') {
+    state = apply(state, { type: 'timeout', at }).state;
+  }
+  return state;
+}
+
 /** playerId of the seat whose clue turn it is. */
 export function whoseTurn(state: RoomState): string {
   return state.seats[state.round!.clueSeat!].playerId!;
@@ -24,6 +50,12 @@ export function whoseTurn(state: RoomState): string {
 export function throughClues(state: RoomState, at = 2000): RoomState {
   while (state.phase === 'clue') state = apply(state, { type: 'timeout', at }).state;
   return state;
+}
+
+/** Times out the bot-call phase, and only that, so a decided round reaches the reveal. */
+export function toReveal(state: RoomState, at = 9000): RoomState {
+  expect(state.phase).toBe('botcall');
+  return apply(state, { type: 'timeout', at }).state;
 }
 
 describe('createRoom', () => {
@@ -40,7 +72,7 @@ describe('join', () => {
     expect(state.seats).toHaveLength(2);
     expect(state.seats[1]).toEqual({
       index: 1, kind: 'human', alias: null, playerId: 'p1', displayName: 'Bob', connected: true,
-      isImposter: false, clues: [], vote: null,
+      isImposter: false, clues: [], vote: null, botCalls: null, score: null,
     });
   });
 
@@ -69,7 +101,7 @@ describe('join', () => {
 
   it('rejects a new player after the round started', () => {
     const result = apply(started(['Ada']), { type: 'join', playerId: 'p9', displayName: 'Late', at: 0 });
-    expect(result.effects[0].code).toBe('room-started');
+    expect(errorCode(result.effects)).toBe('room-started');
     expect(result.state.seats.filter((s) => s.kind === 'human')).toHaveLength(1);
   });
 });
@@ -90,7 +122,7 @@ describe('chat', () => {
 
   it('errors for a player who has not joined', () => {
     const result = apply(roomWith(['Ada']), { type: 'chat', playerId: 'ghost', text: 'boo', at: 5 });
-    expect(result.effects[0].code).toBe('not-seated');
+    expect(errorCode(result.effects)).toBe('not-seated');
     expect(result.state.transcript).toEqual([]);
   });
 
@@ -105,7 +137,7 @@ describe('chat', () => {
 
   it('is closed during the clue phase and open again in the chat phase', () => {
     const inClue = started();
-    expect(apply(inClue, { type: 'chat', playerId: 'p0', text: 'psst', at: 5 }).effects[0].code).toBe('chat-closed');
+    expect(errorCode(apply(inClue, { type: 'chat', playerId: 'p0', text: 'psst', at: 5 }).effects)).toBe('chat-closed');
     const inChat = throughClues(inClue);
     expect(apply(inChat, { type: 'chat', playerId: 'p0', text: 'psst', at: 5 }).state.transcript).toHaveLength(1);
   });
@@ -115,7 +147,8 @@ describe('start', () => {
   it('fills to 6 seats with bots, shuffles, assigns unique aliases, clears lobby chat, opens the clue phase', () => {
     let state = roomWith(['Ada', 'Bob']);
     state = apply(state, { type: 'chat', playerId: 'p0', text: 'lobby talk', at: 5 }).state;
-    const result = apply(state, { type: 'start', playerId: 'p0', at: 1000, seed: 42 });
+    const seed = seedFor(['Ada', 'Bob'], (s) => s.seats[s.round!.clueSeat!].kind === 'human');
+    const result = apply(state, { type: 'start', playerId: 'p0', at: 1000, seed });
     const s = result.state;
     expect(result.effects).toEqual([]);
     expect(s.phase).toBe('clue');
@@ -129,14 +162,17 @@ describe('start', () => {
     expect(s.seats.every((seat) => seat.connected)).toBe(true);
   });
 
-  it('picks a word from a category and exactly one imposter, who is human', () => {
+  it('picks a word from a category and exactly one imposter, human or bot', () => {
     const s = started();
     const category = CATEGORIES.find((c) => c.name === s.round!.category)!;
     expect(category.words).toContain(s.round!.word);
     expect(s.round).toMatchObject({ seed: 42, cluePass: 1, ejected: null, stealGuess: null, result: null });
     const imposters = s.seats.filter((seat) => seat.isImposter);
     expect(imposters).toHaveLength(1);
-    expect(imposters[0].kind).toBe('human');
+
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) kinds.add(started(['Ada', 'Bob'], seed).seats.find((seat) => seat.isImposter)!.kind);
+    expect(kinds).toEqual(new Set(['human', 'bot']));
   });
 
   it('is deterministic for a seed and varies across seeds', () => {
@@ -147,20 +183,10 @@ describe('start', () => {
     expect(orders.size).toBeGreaterThan(1);
   });
 
-  it('passes bot turns instantly so the first turn is a human, recording "" for each skipped bot', () => {
-    const s = started();
-    const turn = s.seats[s.round!.clueSeat!];
-    expect(turn.kind).toBe('human');
-    for (const seat of s.seats) {
-      if (seat.index < turn.index) expect(seat.clues).toEqual(['']);
-      else expect(seat.clues).toEqual([]);
-    }
-  });
-
   it('errors if already started or from a non-member', () => {
     const state = roomWith(['Ada']);
-    expect(apply(state, { type: 'start', playerId: 'ghost', at: 0, seed: 1 }).effects[0].code).toBe('not-seated');
-    expect(apply(started(['Ada']), { type: 'start', playerId: 'p0', at: 0, seed: 1 }).effects[0].code).toBe('already-started');
+    expect(errorCode(apply(state, { type: 'start', playerId: 'ghost', at: 0, seed: 1 }).effects)).toBe('not-seated');
+    expect(errorCode(apply(started(['Ada']), { type: 'start', playerId: 'p0', at: 0, seed: 1 }).effects)).toBe('already-started');
   });
 });
 
@@ -174,30 +200,32 @@ describe('clue', () => {
     const mine = s1.seats.find((seat) => seat.playerId === me)!;
     expect(mine.clues).toEqual(['Crust']);
     expect(s1.phaseEndsAt).toBe(5000 + DURATIONS.clueTurn);
-    expect(s1.phase === 'chat' || s1.seats[s1.round!.clueSeat!].kind === 'human').toBe(true);
     expect(whoseTurn(s1) !== me || s1.round!.cluePass === 2).toBe(true);
   });
 
   it('rejects out-of-turn, multi-word, secret-word, and repeated clues without advancing', () => {
-    // Seed 1: the first turn holder is crew, so the secret-word check below
+    // The first turn holder is a crew human, so the secret-word check below
     // exercises the crew path (see the imposter carve-out tests further down).
-    const s0 = started(['Ada', 'Bob'], 1);
+    const s0 = started(['Ada', 'Bob'], seedFor(['Ada', 'Bob'], (s) => {
+      const t = s.seats[s.round!.clueSeat!];
+      return t.kind === 'human' && !t.isImposter;
+    }));
     const me = whoseTurn(s0);
     const other = me === 'p0' ? 'p1' : 'p0';
-    expect(apply(s0, { type: 'clue', playerId: other, word: 'x', at: 1 }).effects[0].code).toBe('not-your-turn');
-    expect(apply(s0, { type: 'clue', playerId: me, word: 'two words', at: 1 }).effects[0].code).toBe('clue-one-word');
-    expect(apply(s0, { type: 'clue', playerId: me, word: s0.round!.word, at: 1 }).effects[0].code).toBe('clue-is-word');
+    expect(errorCode(apply(s0, { type: 'clue', playerId: other, word: 'x', at: 1 }).effects)).toBe('not-your-turn');
+    expect(errorCode(apply(s0, { type: 'clue', playerId: me, word: 'two words', at: 1 }).effects)).toBe('clue-one-word');
+    expect(errorCode(apply(s0, { type: 'clue', playerId: me, word: s0.round!.word, at: 1 }).effects)).toBe('clue-is-word');
     const s1 = apply(s0, { type: 'clue', playerId: me, word: 'first', at: 1 }).state;
     const next = whoseTurn(s1);
     const dup = apply(s1, { type: 'clue', playerId: next, word: 'FIRST', at: 2 });
-    expect(dup.effects[0].code).toBe('clue-taken');
+    expect(errorCode(dup.effects)).toBe('clue-taken');
     expect(dup.state).toBe(s1);
-    expect(apply(s0, { type: 'clue', playerId: 'ghost', word: 'x', at: 1 }).effects[0].code).toBe('not-seated');
+    expect(errorCode(apply(s0, { type: 'clue', playerId: 'ghost', word: 'x', at: 1 }).effects)).toBe('not-seated');
   });
 
   it('is rejected outside the clue phase', () => {
     const inChat = throughClues(started());
-    expect(apply(inChat, { type: 'clue', playerId: 'p0', word: 'late', at: 1 }).effects[0].code).toBe('wrong-phase');
+    expect(errorCode(apply(inChat, { type: 'clue', playerId: 'p0', word: 'late', at: 1 }).effects)).toBe('wrong-phase');
   });
 
   it('opens the chat phase for 90s after two passes, with clueSeat null and two entries per seat', () => {
@@ -205,7 +233,9 @@ describe('clue', () => {
     const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
     let s = started();
     let n = 0;
-    while (s.phase === 'clue') {
+    while (true) {
+      s = toHumanTurn(s, 3000);
+      if (s.phase !== 'clue') break;
       expect(n).toBeLessThan(words.length); // a rejected clue would otherwise loop forever
       s = apply(s, { type: 'clue', playerId: whoseTurn(s), word: words[n++], at: 3000 }).state;
     }
@@ -226,19 +256,20 @@ describe('clue', () => {
     expect(s.phase).toBe('clue'); // sanity: a crew turn was found before the round moved on
     const me = whoseTurn(s);
     const result = apply(s, { type: 'clue', playerId: me, word: s.round!.word, at: 2 });
-    expect(result.effects[0].code).toBe('clue-is-word');
+    expect(errorCode(result.effects)).toBe('clue-is-word');
     expect(result.state).toBe(s);
   });
 
   it('accepts the imposter clueing the secret word, recording it and advancing the turn', () => {
-    let s = started(['Ada', 'Bob', 'Cal'], 42);
+    let s = started(['Ada', 'Bob'], seedFor(['Ada', 'Bob'], humanImposter));
     while (s.phase === 'clue' && !s.seats[s.round!.clueSeat!].isImposter) {
       s = apply(s, { type: 'timeout', at: 1 }).state;
     }
     expect(s.phase).toBe('clue'); // sanity: the imposter's turn was found before the round moved on
     const imp = s.seats[s.round!.clueSeat!];
     const result = apply(s, { type: 'clue', playerId: imp.playerId!, word: s.round!.word, at: 2 });
-    expect(result.effects).toEqual([]);
+    // The next turn may fall to a bot, which legitimately emits a botTurn effect; only errors matter here.
+    expect(result.effects.some((e) => e.type === 'error')).toBe(false);
     expect(result.state.seats.find((seat) => seat.playerId === imp.playerId)!.clues).toEqual([s.round!.word]);
     expect(result.state.phase !== 'clue' || result.state.round!.clueSeat !== imp.index).toBe(true);
   });
@@ -250,7 +281,6 @@ describe('timeout in the clue phase', () => {
     const me = whoseTurn(s0);
     const s1 = apply(s0, { type: 'timeout', at: 4000 }).state;
     expect(s1.seats.find((seat) => seat.playerId === me)!.clues).toEqual(['']);
-    expect(s1.phase === 'chat' || s1.seats[s1.round!.clueSeat!].kind === 'human').toBe(true);
   });
 
   it('is a no-op in the lobby', () => {
@@ -269,8 +299,8 @@ describe('disconnect', () => {
 });
 
 /** Three humans so a 2-vote majority can eject. Returns the state at the start of the vote phase. */
-function inVote(seed = 42): RoomState {
-  const inChat = throughClues(started(['Ada', 'Bob', 'Cal'], seed));
+function inVote(seed = seedFor(NAMES3, humanImposter)): RoomState {
+  const inChat = throughClues(started(NAMES3, seed));
   return apply(inChat, { type: 'timeout', at: 10_000 }).state;
 }
 
@@ -306,19 +336,23 @@ describe('vote', () => {
   it('rejects self-votes, out-of-range seats, non-integers, and votes outside the vote phase', () => {
     const s0 = inVote();
     const [c1] = crewOf(s0);
-    expect(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: c1.index, at: 1 }).effects[0].code).toBe('bad-vote');
-    expect(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: 6, at: 1 }).effects[0].code).toBe('bad-vote');
-    expect(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: 1.5, at: 1 }).effects[0].code).toBe('bad-vote');
-    expect(apply(started(), { type: 'vote', playerId: 'p0', seat: 1, at: 1 }).effects[0].code).toBe('wrong-phase');
-    expect(apply(s0, { type: 'vote', playerId: 'ghost', seat: 1, at: 1 }).effects[0].code).toBe('not-seated');
+    expect(errorCode(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: c1.index, at: 1 }).effects)).toBe('bad-vote');
+    expect(errorCode(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: 6, at: 1 }).effects)).toBe('bad-vote');
+    expect(errorCode(apply(s0, { type: 'vote', playerId: c1.playerId!, seat: 1.5, at: 1 }).effects)).toBe('bad-vote');
+    expect(errorCode(apply(started(), { type: 'vote', playerId: 'p0', seat: 1, at: 1 }).effects)).toBe('wrong-phase');
+    expect(errorCode(apply(s0, { type: 'vote', playerId: 'ghost', seat: 1, at: 1 }).effects)).toBe('not-seated');
   });
 
-  it('closes as soon as every human has voted; a majority on the imposter opens a 15s steal', () => {
+  it('closes once every bot and connected human has voted; a majority on the imposter opens a 15s steal', () => {
     let s = inVote();
     const imp = imposterOf(s);
     const [c1, c2] = crewOf(s);
     s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: imp.index, at: 1 }).state;
     s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: imp.index, at: 2 }).state;
+    expect(s.phase).toBe('vote');
+    for (const b of s.seats.filter((x) => x.kind === 'bot')) {
+      s = apply(s, { type: 'botVote', seat: b.index, target: imp.index, at: 1 }).state;
+    }
     expect(s.phase).toBe('vote');
     s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c1.index, at: 3000 }).state;
     expect(s.phase).toBe('steal');
@@ -334,8 +368,8 @@ describe('vote', () => {
     s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: c2.index, at: 1 }).state;
     s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c2.index, at: 2 }).state;
     s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: c1.index, at: 3 }).state;
-    expect(s.phase).toBe('reveal');
-    expect(s.phaseEndsAt).toBeNull();
+    s = apply(s, { type: 'timeout', at: 3 }).state;
+    expect(s.phase).toBe('botcall');
     expect(s.round!.ejected).toBe(c2.index);
     expect(s.round!.result).toBe('imposter');
   });
@@ -347,7 +381,7 @@ describe('vote', () => {
     t = apply(t, { type: 'vote', playerId: d1.playerId!, seat: imp.index, at: 1 }).state;
     t = apply(t, { type: 'vote', playerId: d2.playerId!, seat: d1.index, at: 2 }).state;
     t = apply(t, { type: 'timeout', at: 5 }).state;
-    expect(t.phase).toBe('reveal');
+    expect(t.phase).toBe('botcall');
     expect(t.round!.ejected).toBeNull();
     expect(t.round!.result).toBe('imposter');
   });
@@ -363,11 +397,12 @@ describe('vote', () => {
 });
 
 /** State in the steal phase with the imposter ejected. */
-function inSteal(seed = 42): RoomState {
+function inSteal(seed = seedFor(NAMES3, humanImposter)): RoomState {
   let s = inVote(seed);
   const imp = imposterOf(s);
   for (const c of crewOf(s)) s = apply(s, { type: 'vote', playerId: c.playerId!, seat: imp.index, at: 1 }).state;
   s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: crewOf(s)[0].index, at: 2 }).state;
+  s = apply(s, { type: 'timeout', at: 2 }).state;
   expect(s.phase).toBe('steal');
   return s;
 }
@@ -377,7 +412,7 @@ describe('steal', () => {
     const s0 = inSteal();
     const guess = ` ${s0.round!.word.toUpperCase()} `;
     const s1 = apply(s0, { type: 'steal', playerId: imposterOf(s0).playerId!, word: guess, at: 9 }).state;
-    expect(s1.phase).toBe('reveal');
+    expect(s1.phase).toBe('botcall');
     expect(s1.round!.result).toBe('imposter');
     expect(s1.round!.stealGuess).toBe(guess.trim());
   });
@@ -385,11 +420,11 @@ describe('steal', () => {
   it('a wrong guess or a timeout is a crew win', () => {
     const s0 = inSteal();
     const wrong = apply(s0, { type: 'steal', playerId: imposterOf(s0).playerId!, word: 'nope', at: 9 }).state;
-    expect(wrong.phase).toBe('reveal');
+    expect(wrong.phase).toBe('botcall');
     expect(wrong.round!.result).toBe('crew');
     expect(wrong.round!.stealGuess).toBe('nope');
     const late = apply(s0, { type: 'timeout', at: 9 }).state;
-    expect(late.phase).toBe('reveal');
+    expect(late.phase).toBe('botcall');
     expect(late.round!.result).toBe('crew');
     expect(late.round!.stealGuess).toBeNull();
   });
@@ -397,15 +432,15 @@ describe('steal', () => {
   it('only the imposter may steal, and only during the steal phase', () => {
     const s0 = inSteal();
     const crew = crewOf(s0)[0];
-    expect(apply(s0, { type: 'steal', playerId: crew.playerId!, word: 'x', at: 1 }).effects[0].code).toBe('not-imposter');
-    expect(apply(inVote(), { type: 'steal', playerId: 'p0', word: 'x', at: 1 }).effects[0].code).toBe('wrong-phase');
+    expect(errorCode(apply(s0, { type: 'steal', playerId: crew.playerId!, word: 'x', at: 1 }).effects)).toBe('not-imposter');
+    expect(errorCode(apply(inVote(), { type: 'steal', playerId: 'p0', word: 'x', at: 1 }).effects)).toBe('wrong-phase');
   });
 });
 
 describe('again', () => {
   it('returns humans to a fresh lobby, dropping bots, aliases, clues, votes, and the round', () => {
     const s0 = inSteal();
-    const done = apply(s0, { type: 'timeout', at: 1 }).state;
+    const done = toReveal(apply(s0, { type: 'timeout', at: 1 }).state);
     const s1 = apply(done, { type: 'again', playerId: 'p1', at: 2 }).state;
     expect(s1.phase).toBe('lobby');
     expect(s1.phaseEndsAt).toBeNull();
@@ -420,13 +455,278 @@ describe('again', () => {
   });
 
   it('is rejected before the reveal', () => {
-    expect(apply(inVote(), { type: 'again', playerId: 'p0', at: 1 }).effects[0].code).toBe('wrong-phase');
+    expect(errorCode(apply(inVote(), { type: 'again', playerId: 'p0', at: 1 }).effects)).toBe('wrong-phase');
+  });
+});
+
+/** A round decided by a majority on a crew member: goes straight to the bot-call phase, no steal. */
+function decided(): RoomState {
+  let s = inVote();
+  const imp = imposterOf(s);
+  const [c1, c2] = crewOf(s);
+  s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: c2.index, at: 100 }).state;
+  s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: c1.index, at: 100 }).state;
+  s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c1.index, at: 100 }).state;
+  s = apply(s, { type: 'timeout', at: 100 }).state;
+  return s;
+}
+
+describe('bot-call phase', () => {
+  it('a decided round opens a 20s bot-call phase before the reveal and keeps the result on the round', () => {
+    const s = decided();
+    expect(s.phase).toBe('botcall');
+    expect(s.phaseEndsAt).toBe(100 + DURATIONS.botcall);
+    expect(s.round!.ejected).toBe(crewOf(inVote())[0].index);
+    expect(s.round!.result).toBe('imposter');
+    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null)).toBe(true);
+  });
+
+  it('records a human\'s calls, forces the entry for their own seat to null, and rejects malformed calls', () => {
+    const s0 = decided();
+    const [c1] = crewOf(s0);
+    const calls: BotCall[] = s0.seats.map((seat) => seat.kind);
+    const r = apply(s0, { type: 'botcall', playerId: c1.playerId!, calls, at: 200 });
+    expect(r.effects).toEqual([]);
+    expect(r.state.phase).toBe('botcall');
+    const mine = r.state.seats[c1.index].botCalls!;
+    expect(mine[c1.index]).toBeNull();
+    expect(mine.filter((c) => c !== null)).toHaveLength(SEAT_COUNT - 1);
+    expect(errorCode(apply(s0, { type: 'botcall', playerId: c1.playerId!, calls: ['bot'], at: 200 }).effects)).toBe('bad-botcall');
+    const junk = calls.map(() => 'maybe') as unknown as BotCall[];
+    expect(errorCode(apply(s0, { type: 'botcall', playerId: c1.playerId!, calls: junk, at: 200 }).effects)).toBe('bad-botcall');
+    expect(errorCode(apply(inVote(), { type: 'botcall', playerId: c1.playerId!, calls, at: 200 }).effects)).toBe('wrong-phase');
+    expect(errorCode(apply(s0, { type: 'botcall', playerId: 'ghost', calls, at: 200 }).effects)).toBe('not-seated');
+  });
+
+  it('reveals once every connected human has called, scoring one point per correct call on another seat', () => {
+    let s = decided();
+    const humans = s.seats.filter((seat) => seat.kind === 'human');
+    const perfect: BotCall[] = s.seats.map((seat) => seat.kind);
+    const allBots: BotCall[] = s.seats.map(() => 'bot');
+    s = apply(s, { type: 'botcall', playerId: humans[0].playerId!, calls: perfect, at: 200 }).state;
+    s = apply(s, { type: 'botcall', playerId: humans[1].playerId!, calls: allBots, at: 201 }).state;
+    expect(s.phase).toBe('botcall');
+    s = apply(s, { type: 'botcall', playerId: humans[2].playerId!, calls: s.seats.map(() => null), at: 202 }).state;
+    expect(s.phase).toBe('reveal');
+    expect(s.phaseEndsAt).toBeNull();
+    expect(s.seats[humans[0].index].score).toBe(5);
+    expect(s.seats[humans[1].index].score).toBe(3);
+    expect(s.seats[humans[2].index].score).toBe(0);
+    expect(s.seats.filter((seat) => seat.kind === 'bot').every((seat) => seat.score === null)).toBe(true);
+  });
+
+  it('a disconnected human does not hold the phase open, and a timeout reveals with 0 for humans who never called', () => {
+    let s = decided();
+    const humans = s.seats.filter((seat) => seat.kind === 'human');
+    s = apply(s, { type: 'disconnect', playerId: humans[2].playerId! }).state;
+    s = apply(s, { type: 'botcall', playerId: humans[0].playerId!, calls: s.seats.map(() => 'bot'), at: 200 }).state;
+    expect(s.phase).toBe('botcall');
+    s = apply(s, { type: 'botcall', playerId: humans[1].playerId!, calls: s.seats.map(() => 'bot'), at: 201 }).state;
+    expect(s.phase).toBe('reveal');
+    expect(s.seats[humans[2].index].score).toBe(0);
+
+    const t = apply(decided(), { type: 'timeout', at: 300 }).state;
+    expect(t.phase).toBe('reveal');
+    expect(t.seats.filter((seat) => seat.kind === 'human').every((seat) => seat.score === 0)).toBe(true);
+  });
+
+  it('play again drops humans still disconnected and resets calls and scores', () => {
+    let s = apply(decided(), { type: 'timeout', at: 300 }).state;
+    const humans = s.seats.filter((seat) => seat.kind === 'human');
+    s = apply(s, { type: 'disconnect', playerId: humans[1].playerId! }).state;
+    s = apply(s, { type: 'again', playerId: humans[0].playerId!, at: 400 }).state;
+    expect(s.phase).toBe('lobby');
+    expect(s.seats.map((seat) => seat.playerId).sort()).toEqual([humans[0].playerId, humans[2].playerId].sort());
+    expect(s.seats.map((seat) => seat.index)).toEqual([0, 1]);
+    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null)).toBe(true);
   });
 });
 
 describe('timeout in untimed phases', () => {
   it('is a no-op at the reveal', () => {
-    const done = apply(inSteal(), { type: 'timeout', at: 1 }).state;
+    const done = toReveal(apply(inSteal(), { type: 'timeout', at: 1 }).state);
     expect(apply(done, { type: 'timeout', at: 2 }).state).toBe(done);
+  });
+});
+
+describe('bots in the reducer', () => {
+  function startOne(seed: number): Result {
+    return apply(roomWith(['Ada']), { type: 'start', playerId: 'p0', at: 1000, seed });
+  }
+  const botFirst = (s: RoomState) => s.seats[0].kind === 'bot';
+  const botFirstTwo = (s: RoomState) => s.seats[0].kind === 'bot' && s.seats[1].kind === 'bot';
+
+  it('a bot clue turn stays open and emits one botTurn clue effect with a 1.5 to 6s delay', () => {
+    const r = startOne(seedFor(['Ada'], botFirst));
+    expect(r.state.phase).toBe('clue');
+    expect(r.state.round!.clueSeat).toBe(0);
+    expect(r.state.phaseEndsAt).toBe(1000 + DURATIONS.clueTurn);
+    expect(r.effects).toHaveLength(1);
+    expect(r.effects[0]).toMatchObject({ type: 'botTurn', seat: 0, action: 'clue' });
+    const delay = (r.effects[0] as BotTurn).delayMs;
+    expect(delay).toBeGreaterThanOrEqual(1500);
+    expect(delay).toBeLessThan(6000);
+  });
+
+  it('a human turn emits no bot effect', () => {
+    expect(startOne(seedFor(['Ada'], (s) => s.seats[0].kind === 'human')).effects).toEqual([]);
+  });
+
+  it('botClue records the word for the bot on turn and emits the next bot turn', () => {
+    const s0 = startOne(seedFor(['Ada'], botFirstTwo)).state;
+    const r1 = apply(s0, { type: 'botClue', seat: 0, pass: 1, word: 'Brick', at: 1500 });
+    expect(r1.state.seats[0].clues).toEqual(['Brick']);
+    expect(r1.state.round!.clueSeat).toBe(1);
+    expect(r1.state.phaseEndsAt).toBe(1500 + DURATIONS.clueTurn);
+    expect(r1.effects).toMatchObject([{ type: 'botTurn', seat: 1, action: 'clue' }]);
+  });
+
+  it('ignores a botClue that is stale, for the wrong pass, not on turn, or for a human seat', () => {
+    const s0 = startOne(seedFor(['Ada'], botFirstTwo)).state;
+    const s1 = apply(s0, { type: 'botClue', seat: 0, pass: 1, word: 'Brick', at: 1500 }).state;
+    const stale: Event[] = [
+      { type: 'botClue', seat: 0, pass: 1, word: 'late', at: 1600 },
+      { type: 'botClue', seat: 1, pass: 2, word: 'early', at: 1600 },
+      { type: 'botClue', seat: 3, pass: 1, word: 'wrong', at: 1600 },
+    ];
+    for (const ev of stale) {
+      const r = apply(s1, ev);
+      expect(r.state).toBe(s1);
+      expect(r.effects).toEqual([]);
+    }
+    const humanFirst = startOne(seedFor(['Ada'], (s) => s.seats[0].kind === 'human')).state;
+    expect(apply(humanFirst, { type: 'botClue', seat: 0, pass: 1, word: 'nope', at: 1500 }).state).toBe(humanFirst);
+  });
+
+  it('a bot clue that is the secret word, a repeat, or empty is recorded as a passed turn', () => {
+    const s0 = startOne(seedFor(['Ada'], (s) => botFirstTwo(s) && !s.seats[0].isImposter && !s.seats[1].isImposter)).state;
+    const word = s0.round!.word;
+    expect(apply(s0, { type: 'botClue', seat: 0, pass: 1, word, at: 1500 }).state.seats[0].clues).toEqual(['']);
+    expect(apply(s0, { type: 'botClue', seat: 0, pass: 1, word: '', at: 1500 }).state.seats[0].clues).toEqual(['']);
+    const s1 = apply(s0, { type: 'botClue', seat: 0, pass: 1, word: 'brick', at: 1500 }).state;
+    expect(apply(s1, { type: 'botClue', seat: 1, pass: 1, word: 'BRICK', at: 1600 }).state.seats[1].clues).toEqual(['']);
+  });
+
+  it('a clue timeout on a bot turn passes it and emits the next bot turn', () => {
+    const s0 = startOne(seedFor(['Ada'], botFirstTwo)).state;
+    const r = apply(s0, { type: 'timeout', at: 21_000 });
+    expect(r.state.seats[0].clues).toEqual(['']);
+    expect(r.effects).toMatchObject([{ type: 'botTurn', seat: 1, action: 'clue' }]);
+  });
+
+  it('entering the chat emits 2 to 4 chat ticks per bot, each 4 to 80s in, and nothing for humans', () => {
+    let r: Result = { state: started(['Ada', 'Bob']), effects: [] };
+    while (r.state.phase === 'clue') r = apply(r.state, { type: 'timeout', at: 2000 });
+    expect(r.state.phase).toBe('chat');
+    const ticks = r.effects.filter((e): e is BotTurn => e.type === 'botTurn');
+    expect(ticks.length).toBeGreaterThan(0);
+    expect(ticks.every((t) => t.action === 'chat')).toBe(true);
+    for (const seat of r.state.seats) {
+      const mine = ticks.filter((t) => t.seat === seat.index);
+      if (seat.kind === 'human') {
+        expect(mine).toHaveLength(0);
+      } else {
+        expect(mine.length).toBeGreaterThanOrEqual(2);
+        expect(mine.length).toBeLessThanOrEqual(4);
+        for (const t of mine) {
+          expect(t.delayMs).toBeGreaterThanOrEqual(4000);
+          expect(t.delayMs).toBeLessThan(80_000);
+        }
+      }
+    }
+    expect(apply(r.state, { type: 'chat', playerId: 'p0', text: 'hi', at: 2001 }).effects).toEqual([]);
+  });
+
+  it('botChat appends a trimmed, capped line during the chat only, and never for a human seat', () => {
+    const chat = throughClues(started(['Ada', 'Bob']));
+    const bot = chat.seats.find((s) => s.kind === 'bot')!;
+    const human = chat.seats.find((s) => s.kind === 'human')!;
+    const s1 = apply(chat, { type: 'botChat', seat: bot.index, text: '  hmm ' + 'x'.repeat(300), at: 3000 }).state;
+    expect(s1.transcript).toHaveLength(1);
+    expect(s1.transcript[0]).toMatchObject({ seat: bot.index, at: 3000 });
+    expect(s1.transcript[0].text).toHaveLength(MAX_CHAT_LENGTH);
+    expect(apply(chat, { type: 'botChat', seat: bot.index, text: '   ', at: 3000 }).state).toBe(chat);
+    expect(apply(chat, { type: 'botChat', seat: human.index, text: 'nope', at: 3000 }).state).toBe(chat);
+    const clue = started(['Ada', 'Bob']);
+    expect(apply(clue, { type: 'botChat', seat: bot.index, text: 'early', at: 3000 }).state).toBe(clue);
+  });
+
+  it('entering the vote emits one botTurn vote per bot, 3 to 12s in', () => {
+    const chat = throughClues(started(['Ada', 'Bob']));
+    const r = apply(chat, { type: 'timeout', at: 10_000 });
+    expect(r.state.phase).toBe('vote');
+    const votes = r.effects.filter((e): e is BotTurn => e.type === 'botTurn');
+    expect(votes.map((v) => v.seat).sort()).toEqual(r.state.seats.filter((s) => s.kind === 'bot').map((s) => s.index).sort());
+    for (const v of votes) {
+      expect(v.action).toBe('vote');
+      expect(v.delayMs).toBeGreaterThanOrEqual(3000);
+      expect(v.delayMs).toBeLessThan(12_000);
+    }
+  });
+
+  it('bot votes count, the vote waits for bots and connected humans, and a disconnected human does not hold it open', () => {
+    let s = inVote();
+    const bots = s.seats.filter((seat) => seat.kind === 'bot');
+    const [c1, c2] = crewOf(s);
+    const imp = imposterOf(s);
+    for (const b of bots) s = apply(s, { type: 'botVote', seat: b.index, target: imp.index, at: 1 }).state;
+    expect(s.phase).toBe('vote');
+    expect(bots.every((b) => s.seats[b.index].vote === imp.index)).toBe(true);
+    s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: imp.index, at: 2 }).state;
+    s = apply(s, { type: 'disconnect', playerId: c2.playerId! }).state;
+    expect(s.phase).toBe('vote');
+    s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c1.index, at: 3 }).state;
+    expect(s.phase).toBe('steal');
+    expect(s.round!.ejected).toBe(imp.index);
+  });
+
+  it('ignores a bot vote for itself, out of range, from a human seat, outside the vote, or a second vote', () => {
+    const s = inVote();
+    const bot = s.seats.find((seat) => seat.kind === 'bot')!;
+    const human = crewOf(s)[0];
+    expect(apply(s, { type: 'botVote', seat: bot.index, target: bot.index, at: 1 }).state).toBe(s);
+    expect(apply(s, { type: 'botVote', seat: bot.index, target: 9, at: 1 }).state).toBe(s);
+    expect(apply(s, { type: 'botVote', seat: human.index, target: bot.index, at: 1 }).state).toBe(s);
+    const chat = throughClues(started(NAMES3, seedFor(NAMES3, humanImposter)));
+    const chatBot = chat.seats.find((x) => x.kind === 'bot')!;
+    expect(apply(chat, { type: 'botVote', seat: chatBot.index, target: (chatBot.index + 1) % SEAT_COUNT, at: 1 }).state).toBe(chat);
+    const voted = apply(s, { type: 'botVote', seat: bot.index, target: human.index, at: 1 }).state;
+    expect(voted.seats[bot.index].vote).toBe(human.index);
+    expect(apply(voted, { type: 'botVote', seat: bot.index, target: imposterOf(s).index, at: 2 }).state).toBe(voted);
+  });
+
+  it('an ejected bot imposter opens the steal with a botTurn steal, and botSteal decides the round', () => {
+    const seed = seedFor(NAMES3, botImposter);
+    let s = apply(throughClues(started(NAMES3, seed)), { type: 'timeout', at: 10_000 }).state;
+    const imp = imposterOf(s);
+    expect(imp.kind).toBe('bot');
+    for (const h of s.seats.filter((x) => x.kind === 'human')) {
+      s = apply(s, { type: 'vote', playerId: h.playerId!, seat: imp.index, at: 11 }).state;
+    }
+    expect(s.phase).toBe('vote');
+    const r = apply(s, { type: 'timeout', at: 12_000 });
+    expect(r.state.phase).toBe('steal');
+    expect(r.state.phaseEndsAt).toBe(12_000 + DURATIONS.steal);
+    expect(r.effects).toMatchObject([{ type: 'botTurn', seat: imp.index, action: 'steal' }]);
+    const delay = (r.effects[0] as BotTurn).delayMs;
+    expect(delay).toBeGreaterThanOrEqual(2000);
+    expect(delay).toBeLessThan(8000);
+
+    const wrong = apply(r.state, { type: 'botSteal', seat: imp.index, word: 'nope', at: 13_000 }).state;
+    expect(wrong.phase).toBe('botcall');
+    expect(wrong.round).toMatchObject({ result: 'crew', stealGuess: 'nope' });
+    const right = apply(r.state, { type: 'botSteal', seat: imp.index, word: ` ${r.state.round!.word.toUpperCase()} `, at: 13_000 }).state;
+    expect(right.round!.result).toBe('imposter');
+    const crewBot = r.state.seats.find((x) => x.kind === 'bot' && !x.isImposter)!;
+    expect(apply(r.state, { type: 'botSteal', seat: crewBot.index, word: 'x', at: 1 }).state).toBe(r.state);
+  });
+
+  it('an ejected human imposter emits no bot effect', () => {
+    let s = inVote();
+    const imp = imposterOf(s);
+    for (const c of crewOf(s)) s = apply(s, { type: 'vote', playerId: c.playerId!, seat: imp.index, at: 1 }).state;
+    const r = apply(s, { type: 'timeout', at: 12_000 });
+    expect(r.state.phase).toBe('steal');
+    expect(r.effects).toEqual([]);
   });
 });

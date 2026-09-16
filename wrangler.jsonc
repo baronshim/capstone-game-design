@@ -12,5 +12,27 @@
     "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }],
-  "vars": { "BOT_MODE": "fake" }
+  "vars": { "BOT_MODE": "fake", "ROOM_RATE_LIMIT": "5" },
+  // The AI binding needs a Cloudflare login to reach even in `wrangler dev`, so it lives only
+  // in `env.production`; local dev and the test environment never declare it.
+  "env": {
+    "test": {
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
+      },
+      "vars": { "BOT_MODE": "fake", "ROOM_RATE_LIMIT": "0" }
+    },
+    "production": {
+      "name": "imposter-turing",
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
+      },
+      "ai": { "binding": "AI" },
+      "vars": {
+        "BOT_MODE": "live",
+        "BOT_MODEL": "@cf/google/gemma-4-26b-a4b-it",
+        "ROOM_RATE_LIMIT": "5"
+      }
+    }
+  }
 }
