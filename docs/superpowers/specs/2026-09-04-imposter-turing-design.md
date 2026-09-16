@@ -301,7 +301,7 @@ neurons per bot call at roughly 1,500 input and 40 output tokens, so around
 650 calls or 20 to 30 full rounds per day. `BOT_MODEL` overrides it. Each
 call uses the JSON schema `response_format`, `max_completion_tokens` of 80,
 and a temperature around 0.8 for chat and 0.3 for votes and clues. Gemma 4's
-thinking mode is off unless requested, and no reasoning parameter is sent.
+thinking mode is sent OFF explicitly via `chat_template_kwargs: { enable_thinking: false }`. Verified live 2026-09-16: this Workers AI Gemma 4 build defaults thinking ON, and without the flag it spends the whole 80-token budget on `reasoning_content` and returns empty `content`, so every bot call would fall back to scripted.
 A call that has not returned after 5 seconds is abandoned (the promise is
 raced against a timer; the binding has no cancel) and counts as failed.
 

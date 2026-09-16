@@ -6,6 +6,8 @@ secretly a Knight (must tell the truth) or a Knave (must lie) (m4); empty
 seats are bots trying to pass as human. Built for the See You in the Cosmos
 adaptation assignment (theme: the curated self vs. the actual self).
 
+Play it: https://imposter-turing.baronshim.workers.dev
+
 Design spec: `docs/superpowers/specs/2026-09-04-imposter-turing-design.md`
 Plans: `docs/superpowers/plans/`
 
@@ -89,5 +91,5 @@ npm run deploy
 
 - [x] M1 chat room: rooms, aliases, live chat, reconnect
 - [x] M2 Imposter round: word, imposter, clues, chat, vote, steal, reveal
-- [x] M3 bots: Workers AI bots with scripted fallback, bot imposter, bot call and scoring (live check and workers.dev deploy pending login)
+- [x] M3 bots: Workers AI bots with scripted fallback, bot imposter, bot call and scoring, deployed to workers.dev
 - [ ] M4 Knights and Knaves
