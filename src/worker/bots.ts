@@ -1,5 +1,6 @@
 import type { Env } from './env';
 import type { BotTurn, Event, RoomState } from '../game/state';
+import { MAX_STEAL_LENGTH } from '../game/state';
 import { isSecretWord, validateClue } from '../game/words';
 import { type BotContext, type BotInputs, MAX_BOT_LINE, personaFor, styleSheet } from './prompts';
 import { ScriptedBackend } from './backends/scripted';
@@ -12,7 +13,6 @@ export interface BotBackend {
   run(inputs: BotInputs): Promise<unknown>;
 }
 
-const MAX_STEAL_LENGTH = 40;
 
 /** What the bot may know for this turn: never another seat's identity, never the word for the imposter. */
 export function buildInputs(state: RoomState, turn: BotTurn): BotInputs {

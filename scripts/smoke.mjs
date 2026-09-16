@@ -1,5 +1,5 @@
 // End-to-end check against a running `npm run dev` (fake bots), or `npm run dev:live`
-// with LIVE=1 (Workers AI bots, slower, must not be canned). Node 24 provides fetch and WebSocket.
+// with LIVE=1 (Workers AI bots, slower, must not be canned). Node 22 or newer provides fetch and WebSocket.
 import assert from 'node:assert/strict';
 
 const BASE = process.env.BASE ?? 'http://localhost:8787';

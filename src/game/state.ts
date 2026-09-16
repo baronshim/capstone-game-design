@@ -7,7 +7,7 @@ export const SEAT_COUNT = 6;
 export const MAX_CHAT_LENGTH = 280;
 export const MAX_TRANSCRIPT = 200;
 const MAX_NAME_LENGTH = 20;
-const MAX_STEAL_LENGTH = 40;
+export const MAX_STEAL_LENGTH = 40;
 
 export interface Seat {
   index: number;
@@ -330,7 +330,7 @@ function reveal(state: RoomState): RoomState {
   return { ...state, phase: 'reveal', phaseEndsAt: null, seats };
 }
 
-/** Every human who can still call has: disconnected humans do not hold the phase open. */
+/** True once every connected human has locked in their calls; a disconnected human does not hold the phase open. */
 function callsComplete(seats: Seat[]): boolean {
   return seats.every((s) => s.kind !== 'human' || !s.connected || s.botCalls !== null);
 }
