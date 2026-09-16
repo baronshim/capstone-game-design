@@ -108,6 +108,7 @@ function render(): void {
   $('card').innerHTML = cardHtml(snap);
   $('seats').innerHTML = seatsHtml(snap);
   show('start', ph === 'lobby' && seated);
+  show('lobby-hint', ph === 'lobby' && seated);
   show('turn', ph === 'clue');
   $('turn').innerHTML = turnHtml(snap);
   show('clue-form', myTurn);

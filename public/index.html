@@ -4,79 +4,476 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Imposter Turing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; display: flex; justify-content: center; }
-    main { width: 100%; max-width: 480px; padding: 16px; box-sizing: border-box; }
+    /* Deep-space transmission console. Single-world dark design, painted explicitly
+       so it holds on any host ground. */
+    :root {
+      color-scheme: dark;
+      --bg: #080b14;
+      --bg-glow: #0e1730;
+      --panel: #121a2e;
+      --panel-2: #1a2440;
+      --field: #0e1526;
+      --line: #263153;
+      --line-soft: #1c2540;
+      --ink: #eef1fb;
+      --muted: #9aa5c6;
+      --faint: #667architecture;
+      --faint: #6b769b;
+      --accent: #56e0c8;
+      --accent-ink: #06231e;
+      --accent-dim: rgba(86, 224, 200, 0.14);
+      --good: #5ad98a;
+      --bad: #ff7d6b;
+      --warn: #ffce5c;
+      --display: 'Chakra Petch', system-ui, sans-serif;
+      --body: 'IBM Plex Sans', system-ui, sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, monospace;
+      --radius: 14px;
+      --radius-sm: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: var(--body);
+      color: var(--ink);
+      background:
+        radial-gradient(1100px 620px at 50% -8%, var(--bg-glow) 0%, transparent 60%),
+        var(--bg);
+      background-attachment: fixed;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      /* faint starfield, drawn once, static */
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.5;
+      background-image:
+        radial-gradient(1px 1px at 18% 24%, rgba(255,255,255,.5), transparent),
+        radial-gradient(1px 1px at 72% 18%, rgba(255,255,255,.35), transparent),
+        radial-gradient(1px 1px at 42% 62%, rgba(255,255,255,.30), transparent),
+        radial-gradient(1px 1px at 88% 54%, rgba(255,255,255,.28), transparent),
+        radial-gradient(1px 1px at 32% 86%, rgba(255,255,255,.22), transparent),
+        radial-gradient(1px 1px at 62% 92%, rgba(255,255,255,.24), transparent);
+    }
+
     [hidden] { display: none !important; }
-    input, button { font: inherit; padding: 8px 12px; }
-    label { display: block; margin-bottom: 12px; }
-    .row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .row input { flex: 1; min-width: 0; }
-    h2 { display: flex; align-items: baseline; gap: 8px; }
-    h2 small { font-weight: normal; opacity: 0.7; }
-    .timer { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 1.2em; }
-    .card { border: 1px solid #8884; border-radius: 8px; padding: 12px; margin: 8px 0; }
-    .card b { font-size: 1.3em; }
-    #seats { margin: 8px 0; }
-    .seat { padding: 4px 0; display: flex; gap: 8px; align-items: baseline; }
-    .seat.off { opacity: 0.5; }
-    .seat.turn { font-weight: bold; }
-    .seat .clues { opacity: 0.7; font-size: 0.9em; }
-    #vote button { display: block; width: 100%; margin: 6px 0; text-align: left; }
-    #log { height: 40vh; overflow-y: auto; border: 1px solid #8884; padding: 8px; margin: 8px 0; }
-    .line { margin: 4px 0; overflow-wrap: anywhere; }
-    .line b { margin-right: 6px; }
-    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-    td, th { text-align: left; padding: 4px; border-bottom: 1px solid #8884; }
-    .notice { opacity: 0.75; font-size: 0.9em; }
-    #botcall .seat { justify-content: space-between; }
-    .callbtns { display: flex; gap: 4px; }
-    #botcall button.on { font-weight: bold; text-decoration: underline; }
-    .error { color: #c33; min-height: 1.2em; }
+
+    main {
+      position: relative;
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      padding: 20px 18px 40px;
+      min-height: 100dvh;
+    }
+
+    /* ---- typography ---- */
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    /* ---- home ---- */
+    #home { padding-top: 8vh; }
+    .wordmark {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: clamp(34px, 12vw, 52px);
+      line-height: 0.95;
+      letter-spacing: 0.01em;
+      margin: 10px 0 6px;
+      text-wrap: balance;
+    }
+    .wordmark .im { color: var(--accent); }
+    .tagline { color: var(--muted); margin: 0 0 30px; font-size: 15px; }
+
+    label.field {
+      display: block;
+      margin: 0 0 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      margin-top: 7px;
+      padding: 13px 14px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+    input::placeholder { color: var(--faint); }
+    input:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    button {
+      font: inherit;
+      font-weight: 600;
+      color: var(--ink);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: border-color .12s, background .12s, transform .04s;
+    }
+    button:hover { border-color: var(--accent); }
+    button:active { transform: translateY(1px); }
+    button:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .btn-primary {
+      width: 100%;
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: transparent;
+      font-family: var(--display);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      padding: 14px 16px;
+      font-size: 16px;
+    }
+    .btn-primary:hover { background: #6df0d8; border-color: transparent; }
+
+    .join-row { display: flex; gap: 8px; margin-top: 18px; }
+    .join-row input {
+      margin-top: 0;
+      font-family: var(--display);
+      font-weight: 600;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+    }
+    .join-row button { white-space: nowrap; }
+    .or {
+      display: flex; align-items: center; gap: 12px;
+      color: var(--faint); font-size: 12px;
+      font-family: var(--mono); letter-spacing: 0.2em; text-transform: uppercase;
+      margin: 20px 0;
+    }
+    .or::before, .or::after { content: ""; height: 1px; flex: 1; background: var(--line-soft); }
+
+    /* ---- room status bar ---- */
+    .statusbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--panel);
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      margin-bottom: 14px;
+    }
+    .room-code {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: 0.14em;
+      color: var(--ink);
+    }
+    .code-label {
+      font-family: var(--mono); font-size: 9px; letter-spacing: .2em;
+      text-transform: uppercase; color: var(--faint); display: block; margin-bottom: 1px;
+    }
+    .phase-pill {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid rgba(86,224,200,.28);
+      padding: 5px 10px;
+      border-radius: 999px;
+      margin-left: auto;
+    }
+    .timer {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 20px;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      min-width: 2.6ch;
+      text-align: right;
+    }
+    .timer.low { color: var(--warn); }
+    .timer.out { color: var(--bad); }
+    .timer:empty { display: none; }
+
+    .notice {
+      font-size: 13px;
+      color: var(--warn);
+      background: rgba(255,206,92,.10);
+      border: 1px solid rgba(255,206,92,.28);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      margin-bottom: 12px;
+    }
+
+    /* ---- the word card ---- */
+    .card { margin-bottom: 14px; }
+    .card-inner {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      background:
+        linear-gradient(180deg, rgba(86,224,200,.05), transparent 70%),
+        var(--panel);
+      text-align: center;
+    }
+    .card-inner.imposter {
+      border-color: rgba(255,125,107,.5);
+      background: linear-gradient(180deg, rgba(255,125,107,.08), transparent 70%), var(--panel);
+    }
+    .card-eyebrow {
+      font-family: var(--mono); font-size: 11px; letter-spacing: .2em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+    }
+    .card-word {
+      font-family: var(--display); font-weight: 700;
+      font-size: clamp(28px, 9vw, 40px); line-height: 1.05;
+      letter-spacing: 0.01em; text-wrap: balance;
+    }
+    .card-badge {
+      display: inline-block;
+      font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--bad); border: 1px solid rgba(255,125,107,.5);
+      border-radius: 999px; padding: 4px 12px; margin-bottom: 12px;
+    }
+    .card-note { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+    /* ---- seats ---- */
+    #seats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .seat {
+      --seat: var(--accent);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      background: var(--panel);
+      border: 1px solid var(--line-soft);
+      border-left: 3px solid var(--seat);
+      border-radius: var(--radius-sm);
+    }
+    .seat.off { opacity: 0.45; }
+    .seat.turn {
+      border-color: var(--seat);
+      box-shadow: 0 0 0 1px var(--seat), 0 0 18px -6px var(--seat);
+    }
+    .sig { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--seat); flex: none; }
+    .seat.turn .dot { animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .alias {
+      font-family: var(--display); font-weight: 600; font-size: 15px;
+      color: var(--seat);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .badge-you {
+      font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--bg); background: var(--seat); border-radius: 4px; padding: 2px 5px; flex: none;
+    }
+    .check { color: var(--good); font-weight: 700; flex: none; }
+    .clues {
+      margin-left: auto; display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end;
+    }
+    .clue-chip {
+      font-family: var(--mono); font-size: 11px;
+      color: var(--muted); background: var(--field);
+      border: 1px solid var(--line-soft); border-radius: 6px; padding: 2px 7px;
+      white-space: nowrap;
+    }
+    .clue-chip.empty { color: var(--faint); font-style: italic; }
+
+    /* ---- turn banner ---- */
+    #turn { margin: 0 0 12px; font-size: 15px; color: var(--muted); }
+    #turn .turn-you { color: var(--accent); font-weight: 600; }
+    #turn b { color: var(--ink); }
+
+    /* ---- forms in room ---- */
+    .row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .row input { margin-top: 0; }
+    .row button { flex: none; }
+
+    /* ---- vote & bot call ---- */
+    .prompt { font-family: var(--display); font-weight: 600; font-size: 16px; margin: 4px 0 10px; }
+    #vote { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .vote-row {
+      --seat: var(--accent);
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; text-align: left;
+      background: var(--panel); border-color: var(--line-soft);
+      border-left: 3px solid var(--seat);
+    }
+    .vote-row .alias { font-size: 15px; }
+    .vote-row:hover { border-color: var(--seat); }
+
+    #botcall { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+    .call-row {
+      --seat: var(--accent);
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px 8px 12px;
+      background: var(--panel); border: 1px solid var(--line-soft);
+      border-left: 3px solid var(--seat); border-radius: var(--radius-sm);
+    }
+    .callbtns { margin-left: auto; display: flex; gap: 6px; flex: none; }
+    .callbtns button { padding: 7px 12px; font-size: 13px; }
+    .callbtns button.on[data-call="human"] { background: var(--good); color: #06210f; border-color: transparent; }
+    .callbtns button.on[data-call="bot"] { background: var(--warn); color: #2a2100; border-color: transparent; }
+
+    /* ---- reveal ---- */
+    .reveal-panel {
+      border: 1px solid var(--line); border-radius: var(--radius);
+      background: var(--panel); padding: 18px; margin-bottom: 14px;
+    }
+    .reveal-headline {
+      font-family: var(--display); font-weight: 700; font-size: 26px;
+      text-align: center; margin: 0 0 6px;
+    }
+    .reveal-headline.crew { color: var(--good); }
+    .reveal-headline.imposter { color: var(--bad); }
+    .reveal-sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+    .reveal-sub b { color: var(--ink); font-family: var(--display); }
+    .reveal-list { display: flex; flex-direction: column; gap: 5px; }
+    .reveal-seat {
+      --seat: var(--accent);
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px;
+      padding: 9px 11px; background: var(--field);
+      border: 1px solid var(--line-soft); border-left: 3px solid var(--seat);
+      border-radius: var(--radius-sm);
+    }
+    .reveal-seat .alias { font-size: 14px; }
+    .reveal-seat .who { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .reveal-seat .who.bot { color: var(--warn); }
+    .tag-imp {
+      font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--bad); border: 1px solid rgba(255,125,107,.5); border-radius: 4px; padding: 1px 6px;
+    }
+    .reveal-votes { font-size: 12px; color: var(--faint); grid-column: 1 / -1; }
+    .scores {
+      margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft);
+      font-size: 13px; color: var(--muted);
+    }
+    .scores b { color: var(--accent); }
+
+    /* ---- chat log ---- */
+    #log {
+      height: 38vh; min-height: 160px; overflow-y: auto;
+      background: var(--field); border: 1px solid var(--line-soft);
+      border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px;
+    }
+    #log:empty::after {
+      content: "Transmission channel open.";
+      color: var(--faint); font-family: var(--mono); font-size: 12px;
+    }
+    .line { margin: 5px 0; font-size: 14px; overflow-wrap: anywhere; }
+    .line .who { font-family: var(--display); font-weight: 600; margin-right: 7px; color: var(--seat, var(--accent)); }
+
+    /* ---- misc ---- */
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+    #start, #again, #lock-calls { width: 100%; }
+    #start, #again { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-family: var(--display); letter-spacing: .03em; }
+    #steal-wait { color: var(--muted); font-size: 14px; text-align: center; padding: 10px; }
+    .hint { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 10px 2px 0; }
+    .error { color: var(--bad); min-height: 1.2em; font-size: 14px; margin: 4px 0 0; text-align: center; }
+    footer { margin-top: 22px; text-align: center; }
+    .footnote { color: var(--faint); font-size: 11px; font-family: var(--mono); letter-spacing: .08em; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body>
   <main>
     <section id="home">
-      <h1>Imposter Turing</h1>
-      <label>Your name <input id="name" maxlength="20" autocomplete="nickname"></label>
-      <div class="row"><button id="create">Create room</button></div>
-      <div class="row">
-        <input id="code" placeholder="Room code" maxlength="4" autocapitalize="characters">
+      <div class="eyebrow">A Turing test you play</div>
+      <h1 class="wordmark"><span class="im">Imposter</span> Turing</h1>
+      <p class="tagline">Six call signs. One imposter who never learned the word. Some of the voices are machines. Find the fake before it finds the word.</p>
+
+      <label class="field">Your name
+        <input id="name" maxlength="20" autocomplete="nickname" placeholder="e.g. Alex">
+      </label>
+      <button id="create" class="btn-primary">Create a room</button>
+
+      <div class="or">or join</div>
+
+      <div class="join-row">
+        <input id="code" placeholder="Code" maxlength="4" autocapitalize="characters">
         <button id="join">Join</button>
       </div>
     </section>
 
     <section id="room" hidden>
-      <h2>Room <span id="room-code"></span> <small id="phase"></small> <span id="timer" class="timer"></span></h2>
-      <p id="notice" class="notice" hidden>Bots are on autopilot today: the daily AI budget is used up, so they play by script.</p>
+      <div class="statusbar">
+        <div>
+          <span class="code-label">Room</span>
+          <span id="room-code" class="room-code"></span>
+        </div>
+        <span id="phase" class="phase-pill"></span>
+        <span id="timer" class="timer"></span>
+      </div>
+
+      <p id="notice" class="notice" hidden>Bots are on autopilot today — the daily AI budget is used up, so they play by script.</p>
+
       <div id="card" class="card" hidden></div>
+
       <div id="seats"></div>
-      <button id="start" hidden>Start</button>
+
+      <button id="start" hidden>Start the round</button>
+      <p id="lobby-hint" class="hint" hidden>Share the room code above. Empty seats fill with AI players trying to pass as human — best with three or more people. Start when everyone's in.</p>
+
       <p id="turn" hidden></p>
       <form id="clue-form" class="row" hidden>
         <input id="clue" maxlength="20" autocomplete="off" placeholder="One-word clue">
-        <button>Give clue</button>
+        <button class="btn-primary" style="width:auto">Send</button>
       </form>
+
       <div id="vote" hidden></div>
+
       <form id="steal-form" class="row" hidden>
-        <input id="steal" maxlength="40" autocomplete="off" placeholder="Guess the word">
-        <button>Steal</button>
+        <input id="steal" maxlength="40" autocomplete="off" placeholder="Guess the secret word">
+        <button class="btn-primary" style="width:auto">Steal</button>
       </form>
       <p id="steal-wait" hidden>The imposter was caught and is guessing the word…</p>
+
       <div id="botcall" hidden></div>
       <button id="lock-calls" hidden>Lock in calls</button>
+
       <div id="reveal" hidden></div>
       <button id="again" hidden>Play again</button>
+
       <div id="log" hidden></div>
       <form id="composer" class="row" hidden>
-        <input id="text" maxlength="280" autocomplete="off" placeholder="Say something">
+        <input id="text" maxlength="280" autocomplete="off" placeholder="Say something…">
         <button>Send</button>
       </form>
     </section>
 
     <p id="error" class="error"></p>
+
+    <footer><span class="footnote">imposter turing · signal or noise?</span></footer>
   </main>
   <script type="module" src="/app.js"></script>
 </body>
