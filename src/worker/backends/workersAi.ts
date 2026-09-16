@@ -28,6 +28,8 @@ export class WorkersAiBackend implements BotBackend {
       response_format: { type: 'json_schema', json_schema: schemaFor(inputs.action) },
       max_tokens: MAX_OUTPUT_TOKENS,
       temperature: inputs.action === 'chat' ? 0.8 : 0.3,
+      // Gemma 4 on Workers AI defaults thinking ON; without this it spends the whole token budget on reasoning and returns empty content (verified live 2026-09-16).
+      chat_template_kwargs: { enable_thinking: false },
     });
     return parseAiResponse(res);
   }

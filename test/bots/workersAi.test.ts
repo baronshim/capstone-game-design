@@ -60,6 +60,7 @@ describe('WorkersAiBackend', () => {
     expect(req.max_tokens).toBe(MAX_OUTPUT_TOKENS);
     expect(MAX_OUTPUT_TOKENS).toBe(80);
     expect(req.temperature).toBe(0.3);
+    expect(req.chat_template_kwargs).toEqual({ enable_thinking: false });
     const messages = req.messages as { role: string; content: string }[];
     expect(messages.map((m) => m.role)).toEqual(['system', 'user']);
     expect(messages[0].content).toContain('Imposter Turing');
