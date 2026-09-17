@@ -6,9 +6,9 @@ import type { ClientMessage, ServerMessage } from '../game/protocol';
 import { type BotRunner, makeRunner } from './bots';
 
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
-/** Typing-time simulation for bot chat (spec 5.5): 40ms per character, at most 4s. */
-const TYPING_MS_PER_CHAR = 40;
-const MAX_TYPING_MS = 4000;
+/** Typing-time simulation for bot chat (spec 5.5): 30ms per character, at most 2.5s. */
+export const TYPING_MS_PER_CHAR = 30;
+export const MAX_TYPING_MS = 2500;
 
 interface Attachment {
   playerId: string | null;

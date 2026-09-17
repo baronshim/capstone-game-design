@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { apply, createRoom, MAX_CHAT_LENGTH, MAX_TRANSCRIPT, SEAT_COUNT, type BotTurn, type Result, type RoomState } from '../../src/game/state';
+import { apply, createRoom, MAX_CHAT_LENGTH, MAX_TRANSCRIPT, namesSeat, SEAT_COUNT, type BotTurn, type Result, type RoomState } from '../../src/game/state';
 import type { Effect, Event } from '../../src/game/state';
 import { DURATIONS, POINTS } from '../../src/game/rules';
 import { CATEGORIES } from '../../src/game/words';
@@ -650,27 +650,92 @@ describe('bots in the reducer', () => {
     expect(r.effects).toMatchObject([{ type: 'botTurn', seat: 1, action: 'clue' }]);
   });
 
-  it('entering the chat emits 1 to 3 chat ticks per bot, each 6 to 80s in, and nothing for humans', () => {
+  it('entering the chat emits 3 to 5 chat ticks per bot with moves, two openers within 6s, none past 80s, and the first an open', () => {
     let r: Result = { state: started(['Ada', 'Bob']), effects: [] };
     while (r.state.phase === 'clue') r = apply(r.state, { type: 'timeout', at: 2000 });
     expect(r.state.phase).toBe('chat');
     const ticks = r.effects.filter((e): e is BotTurn => e.type === 'botTurn');
     expect(ticks.length).toBeGreaterThan(0);
-    expect(ticks.every((t) => t.action === 'chat')).toBe(true);
+    expect(ticks.every((t) => t.action === 'chat' && typeof t.move === 'string')).toBe(true);
     for (const seat of r.state.seats) {
       const mine = ticks.filter((t) => t.seat === seat.index);
       if (seat.kind === 'human') {
         expect(mine).toHaveLength(0);
       } else {
-        expect(mine.length).toBeGreaterThanOrEqual(1);
-        expect(mine.length).toBeLessThanOrEqual(3);
+        expect(mine.length).toBeGreaterThanOrEqual(3);
+        expect(mine.length).toBeLessThanOrEqual(5);
         for (const t of mine) {
-          expect(t.delayMs).toBeGreaterThanOrEqual(6000);
+          expect(t.delayMs).toBeGreaterThanOrEqual(2000);
           expect(t.delayMs).toBeLessThan(80_000);
         }
       }
     }
-    expect(apply(r.state, { type: 'chat', playerId: 'p0', text: 'hi', at: 2001 }).effects).toEqual([]);
+    const early = ticks.filter((t) => t.delayMs < 6000);
+    expect(new Set(early.map((t) => t.seat)).size).toBe(2);
+    const first = ticks.reduce((a, b) => (b.delayMs < a.delayMs ? b : a));
+    expect(first.move).toBe('open');
+    const moves = new Set(ticks.map((t) => t.move));
+    expect(moves.size).toBeGreaterThan(1);
+  });
+
+  it('a line posted during the chat can owe one reply tick, 2.5 to 7s later, never to the speaker', () => {
+    let seen = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      let s = started(['Ada', 'Bob'], seed);
+      while (s.phase === 'clue') s = apply(s, { type: 'timeout', at: 2000 }).state;
+      const r = apply(s, { type: 'chat', playerId: 'p0', text: 'nobody is standing out yet', at: 2001 });
+      const human = r.state.seats.find((x) => x.playerId === 'p0')!;
+      const ticks = r.effects.filter((e): e is BotTurn => e.type === 'botTurn');
+      expect(ticks.length).toBeLessThanOrEqual(1);
+      total++;
+      for (const t of ticks) {
+        seen++;
+        expect(t).toMatchObject({ action: 'chat', move: 'react' });
+        expect(t.seat).not.toBe(human.index);
+        expect(r.state.seats[t.seat].kind).toBe('bot');
+        expect(t.delayMs).toBeGreaterThanOrEqual(2500);
+        expect(t.delayMs).toBeLessThan(7000);
+      }
+    }
+    expect(seen).toBeGreaterThan(total * 0.3);
+    expect(seen).toBeLessThan(total * 0.9);
+  });
+
+  it('a line that names a bot by one word of its call sign owes that bot a defend tick', () => {
+    let defends = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      let s = started(['Ada', 'Bob'], seed);
+      while (s.phase === 'clue') s = apply(s, { type: 'timeout', at: 2000 }).state;
+      const bot = s.seats.find((x) => x.kind === 'bot')!;
+      const word = bot.alias!.split(' ')[1].toLowerCase();
+      const r = apply(s, { type: 'chat', playerId: 'p0', text: `${word} why that second clue`, at: 2001 });
+      const ticks = r.effects.filter((e): e is BotTurn => e.type === 'botTurn');
+      for (const t of ticks) expect(t).toMatchObject({ seat: bot.index, action: 'chat', move: 'defend' });
+      defends += ticks.length;
+    }
+    expect(defends).toBeGreaterThanOrEqual(15);
+    expect(namesSeat('coral fox is off', 'Coral Fox')).toBe(true);
+    expect(namesSeat('the fox clue', 'Coral Fox')).toBe(true);
+    expect(namesSeat('foxes everywhere', 'Coral Fox')).toBe(false);
+    expect(namesSeat('a b c', null)).toBe(false);
+  });
+
+  it('a bot line owes replies less often than a human line, and never in the lobby or after the chat', () => {
+    let s = started(['Ada', 'Bob'], 3);
+    while (s.phase === 'clue') s = apply(s, { type: 'timeout', at: 2000 }).state;
+    let botReplies = 0;
+    for (let i = 0; i < 30; i++) {
+      const bot = s.seats.filter((x) => x.kind === 'bot')[i % 4];
+      const r = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i} nothing here`, at: 2001 + i });
+      s = r.state;
+      botReplies += r.effects.length;
+      for (const e of r.effects) expect((e as BotTurn).seat).not.toBe(bot.index);
+    }
+    expect(botReplies).toBeGreaterThan(0);
+    expect(botReplies).toBeLessThan(18);
+    const lobby = apply(roomWith(['Ada']), { type: 'chat', playerId: 'p0', text: 'hello', at: 5 });
+    expect(lobby.effects).toEqual([]);
   });
 
   it('botChat appends a trimmed, capped line during the chat only, and never for a human seat', () => {

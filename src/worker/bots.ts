@@ -2,7 +2,7 @@ import type { Env } from './env';
 import type { BotTurn, Event, RoomState } from '../game/state';
 import { MAX_STEAL_LENGTH } from '../game/state';
 import { isSecretWord, validateClue } from '../game/words';
-import { type BotContext, type BotInputs, MAX_BOT_LINE, personaFor, styleSheet } from './prompts';
+import { type BotContext, type BotInputs, MAX_BOT_LINE, personaFor, type Read, styleSheet } from './prompts';
 import { ScriptedBackend } from './backends/scripted';
 import { FakeBackend } from './backends/fake';
 import { DEFAULT_MODEL, WorkersAiBackend, type AiLike } from './backends/workersAi';
@@ -14,8 +14,8 @@ export interface BotBackend {
 }
 
 
-/** What the bot may know for this turn: never another seat's identity, never the word for the imposter. */
-export function buildInputs(state: RoomState, turn: BotTurn): BotInputs {
+/** What the bot may know for this turn: never another seat's identity, never the word for the imposter. `read` is its own last theory. */
+export function buildInputs(state: RoomState, turn: BotTurn, read: Read | null = null): BotInputs {
   const round = state.round!;
   const seat = state.seats[turn.seat];
   const humanSeats = new Set(state.seats.filter((s) => s.kind === 'human').map((s) => s.index));
@@ -31,8 +31,11 @@ export function buildInputs(state: RoomState, turn: BotTurn): BotInputs {
     transcript: state.transcript,
     style: styleSheet(state.transcript.filter((l) => humanSeats.has(l.seat)).map((l) => l.text)),
     persona: personaFor(round.seed, seat.index),
+    read,
   };
-  return turn.action === 'clue' ? { action: 'clue', pass: round.cluePass, ...ctx } : { action: turn.action, ...ctx };
+  if (turn.action === 'clue') return { action: 'clue', pass: round.cluePass, ...ctx };
+  if (turn.action === 'chat') return { action: 'chat', ...ctx, move: turn.move ?? 'react' };
+  return { action: turn.action, ...ctx };
 }
 
 /** True when any token of `text` is the secret word or a plural or stem of it (spec 5.7). */
@@ -43,8 +46,21 @@ export function mentionsWord(text: string, word: string): boolean {
 
 export type Validated = { ok: true; event: Event | null } | { ok: false; reason: string };
 
-/** Chat lines a bot may post per round; humans rarely say more in 90 seconds, and bots that do get spotted. */
-export const MAX_BOT_LINES_PER_ROUND = 3;
+/** The theory a chat reply carries, or null when it names an invalid seat or the bot itself. Silence still carries one. */
+export function readFrom(inputs: BotInputs, raw: unknown): Read | null {
+  if (inputs.action !== 'chat' || raw === null || typeof raw !== 'object') return null;
+  const out = raw as Record<string, unknown>;
+  const suspect = out.suspect;
+  if (typeof suspect !== 'number' || !Number.isInteger(suspect) || suspect < 0 || suspect >= inputs.aliases.length || suspect === inputs.seat) return null;
+  const reason = typeof out.reason === 'string' ? out.reason.trim().slice(0, 80) : '';
+  return { suspect, reason: reason || 'gut feeling' };
+}
+
+/** Chat lines a bot may post per round; a talkative human manages about this many in 90 seconds. */
+export const MAX_BOT_LINES_PER_ROUND = 5;
+
+/** Openers of a line that only agrees with someone. */
+const AGREE = /^(yeah|yep|yea|ya|yup|same|agreed?|true|exactly|right|this|facts|i agree|i think so too|good point|fair)\b/i;
 
 /** Model-speak that reads as a bot in this game's chat (seen live 2026-09-16). Matched as whole words, case-insensitive. */
 const FILLER = /\b(definitely|sus|vibes|for real|honestly|tbh|lol|haha|let'?s go+|hyped?|ready to (win|play|go))\b/i;
@@ -71,6 +87,11 @@ function wordSet(text: string): Set<string> {
   );
 }
 
+/** True when `text` opens by agreeing and adds at most a name or two of its own, like "yeah same" or "agree with fox". */
+export function pureAgreement(text: string): boolean {
+  return AGREE.test(text.trim()) && wordSet(text).size <= 3;
+}
+
 /** True when `text` makes the point `prior` made: at least three quarters of the shorter line's content words are in the other. */
 export function nearDuplicate(text: string, prior: string): boolean {
   const a = wordSet(text);
@@ -86,6 +107,7 @@ export function chatLineProblem(text: string, inputs: Extract<BotInputs, { actio
   if (FILLER.test(text)) return 'say-filler';
   if (EMOJI.test(text) && inputs.style.emojiRate === 0) return 'say-emoji';
   if (inputs.transcript.some((l) => nearDuplicate(text, l.text))) return 'say-duplicate';
+  if (pureAgreement(text)) return 'say-agree';
   return null;
 }
 
@@ -140,13 +162,15 @@ export interface RunnerOptions {
   onFallback?: (action: string, reason: string) => void;
 }
 
-export const DEFAULT_BUDGET = 40;
+export const DEFAULT_BUDGET = 60;
 export const DEFAULT_TIMEOUT_MS = 5000;
 
 /** Runs bot turns: primary backend first, scripted fallback on any failure, per-round budget, daily autopilot. */
 export class BotRunner {
   private primaryCalls = 0;
   private roundSeed: number | null = null;
+  /** Each bot's latest theory this round, by seat. Lives with the object, like its pending timers. */
+  private reads = new Map<number, Read>();
   autopilotUntil = 0;
 
   constructor(
@@ -159,18 +183,26 @@ export class BotRunner {
     return this.opts.now() < this.autopilotUntil;
   }
 
+  /** What a seat currently thinks, for tests and logs. */
+  readOf(seat: number): Read | null {
+    return this.reads.get(seat) ?? null;
+  }
+
   /** The event to dispatch for this turn, or null when the bot stays silent or nothing valid came back. */
   async turn(state: RoomState, turn: BotTurn): Promise<Event | null> {
     if (!state.round) return null;
     if (state.round.seed !== this.roundSeed) {
       this.roundSeed = state.round.seed;
       this.primaryCalls = 0;
+      this.reads.clear();
     }
-    const inputs = buildInputs(state, turn);
+    const inputs = buildInputs(state, turn, this.reads.get(turn.seat) ?? null);
     if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < this.opts.budgetPerRound) {
       this.primaryCalls++;
       const result = await this.callPrimary(inputs);
       if (result.ok) {
+        const read = readFrom(inputs, result.raw);
+        if (read) this.reads.set(turn.seat, read);
         const v = validateOutput(state, inputs, result.raw, this.opts.now());
         if (v.ok) return v.event;
         this.opts.onFallback?.(inputs.action, v.reason);

@@ -7,6 +7,8 @@ import {
   isQuotaError,
   mentionsWord,
   nextUtcMidnight,
+  pureAgreement,
+  readFrom,
   validateOutput,
   type BotBackend,
 } from '../../src/worker/bots';
@@ -39,7 +41,7 @@ function inVote(pred?: (s: RoomState) => boolean): RoomState {
   return apply(inChat(pred), { type: 'timeout', at: 3000 }).state;
 }
 
-const turn = (seat: number, action: BotTurn['action']): BotTurn => ({ type: 'botTurn', seat, action, delayMs: 0 });
+const turn = (seat: number, action: BotTurn['action'], move?: BotTurn['move']): BotTurn => ({ type: 'botTurn', seat, action, delayMs: 0, move });
 
 const stub = (reply: unknown | (() => Promise<unknown>)): BotBackend & { calls: number } => {
   const backend = {
@@ -66,6 +68,16 @@ describe('buildInputs', () => {
     expect(imp.aliases).toHaveLength(6);
     expect(imp.alias).toBe(imp.aliases[0]);
     expect(PERSONAS).toContain(imp.persona);
+  });
+
+  it('passes the turn\'s move and the bot\'s read through, defaulting to react and null', () => {
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    expect(buildInputs(s, turn(bot.index, 'chat'))).toMatchObject({ action: 'chat', move: 'react', read: null });
+    const read = { suspect: (bot.index + 1) % 6, reason: 'vague' };
+    expect(buildInputs(s, turn(bot.index, 'chat', 'open'), read)).toMatchObject({ move: 'open', read });
+    expect(buildInputs(s, turn(bot.index, 'vote'), read)).toMatchObject({ action: 'vote', read });
+    expect(buildInputs(s, turn(bot.index, 'vote'), read)).not.toHaveProperty('move');
   });
 
   it('builds the style sheet from human lines only', () => {
@@ -122,21 +134,44 @@ describe('validateOutput', () => {
     expect(validateOutput(s, inputs, { say: 'fox is definitely the imposter' }, 9)).toMatchObject({ ok: false, reason: 'say-filler' });
     expect(validateOutput(s, inputs, { say: "Let's gooo!" }, 9)).toMatchObject({ ok: false, reason: 'say-filler' });
     expect(validateOutput(s, inputs, { say: 'hmm fox? 🤔' }, 9)).toMatchObject({ ok: false, reason: 'say-emoji' });
+    expect(validateOutput(s, inputs, { say: 'yeah same' }, 9)).toMatchObject({ ok: false, reason: 'say-agree' });
+    expect(validateOutput(s, inputs, { say: 'Agreed, fox.' }, 9)).toMatchObject({ ok: false, reason: 'say-agree' });
     expect(validateOutput(s, inputs, { say: 'wait why fruit' }, 9)).toEqual({
       ok: true,
       event: { type: 'botChat', seat: b.index, text: 'wait why fruit', at: 9 },
     });
   });
 
-  it('lets a bot use emoji once a human has, and silences a bot after its third line', () => {
+  it('lets a bot use emoji once a human has, and silences a bot after its fifth line', () => {
     let s = inChat();
     const bot = s.seats.find((x) => x.kind === 'bot')!;
     s = apply(s, { type: 'chat', playerId: 'p0', text: 'ok 😀', at: 5 }).state;
     let inputs = buildInputs(s, turn(bot.index, 'chat'));
     expect(validateOutput(s, inputs, { say: 'hm 🤔' }, 9)).toMatchObject({ ok: true });
-    for (let i = 0; i < 3; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 6 + i }).state;
+    for (let i = 0; i < 4; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 6 + i }).state;
+    inputs = buildInputs(s, turn(bot.index, 'chat'));
+    expect(validateOutput(s, inputs, { say: 'still fine' }, 9)).toMatchObject({ ok: true, event: { text: 'still fine' } });
+    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 4', at: 10 }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
     expect(validateOutput(s, inputs, { say: 'one more thing' }, 9)).toEqual({ ok: true, event: null });
+  });
+
+  it('pureAgreement catches lines that only agree and lets lines with a reason through', () => {
+    for (const t of ['yeah same', 'agreed', 'true', 'i agree with fox', 'exactly this', 'Yep, fox for sure.']) expect(pureAgreement(t)).toBe(true);
+    for (const t of ['yeah but fruit was a weird second clue', 'same read, round gives it away', 'fox why fruit']) expect(pureAgreement(t)).toBe(false);
+  });
+
+  it('readFrom takes the suspect and reason from a chat reply, even a silent one, and rejects self or bad seats', () => {
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    const other = s.seats.find((x) => x.index !== bot.index)!;
+    const inputs = buildInputs(s, turn(bot.index, 'chat'));
+    expect(readFrom(inputs, { say: null, suspect: other.index, reason: '  round is lazy  ' })).toEqual({ suspect: other.index, reason: 'round is lazy' });
+    expect(readFrom(inputs, { say: 'hm', suspect: other.index })).toEqual({ suspect: other.index, reason: 'gut feeling' });
+    expect(readFrom(inputs, { say: 'hm', suspect: bot.index, reason: 'me' })).toBeNull();
+    expect(readFrom(inputs, { say: 'hm', suspect: 9, reason: 'x' })).toBeNull();
+    expect(readFrom(inputs, { say: 'hm' })).toBeNull();
+    expect(readFrom(buildInputs(s, turn(bot.index, 'vote')), { vote: 1, suspect: other.index })).toBeNull();
   });
 
   it('accepts a vote for another live seat only', () => {
@@ -278,6 +313,38 @@ describe('BotRunner', () => {
     expect(await runner(stub({ say: null }), fallback).turn(s, turn(bot.index, 'chat'))).toBeNull();
     expect(fallback.calls).toBe(0);
     expect(await runner(stub({ clue: 'x'.repeat(30) }), stub({ clue: 'x'.repeat(30) })).turn(clueState, clueTurn)).toBeNull();
+  });
+
+  it('remembers each bot\'s read from its chat replies, feeds it to later turns, and forgets it on a new round', async () => {
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    const other = s.seats.find((x) => x.index !== bot.index)!;
+    const seen: (BotInputs['read'] | undefined)[] = [];
+    const primary: BotBackend = {
+      async run(inputs) {
+        seen.push(inputs.read);
+        if (inputs.action === 'chat') return { say: null, suspect: other.index, reason: 'too neat' };
+        return { vote: other.index };
+      },
+    };
+    const r = runner(primary, new ScriptedBackend());
+    expect(await r.turn(s, turn(bot.index, 'chat'))).toBeNull();
+    expect(r.readOf(bot.index)).toEqual({ suspect: other.index, reason: 'too neat' });
+    await r.turn(s, turn(bot.index, 'chat'));
+    expect(seen).toEqual([null, { suspect: other.index, reason: 'too neat' }]);
+    expect(r.readOf((bot.index + 1) % 6 === other.index ? (bot.index + 2) % 6 : (bot.index + 1) % 6)).toBeNull();
+    const next = started((x) => x.round!.seed !== s.round!.seed);
+    await r.turn(next, turn(0, 'clue'));
+    expect(r.readOf(bot.index)).toBeNull();
+  });
+
+  it('keeps the read even when the line itself is rejected', async () => {
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    const other = s.seats.find((x) => x.index !== bot.index)!;
+    const r = runner(stub({ say: 'yeah same', suspect: other.index, reason: 'copycat' }), new ScriptedBackend());
+    expect(await r.turn(s, turn(bot.index, 'chat'))).toBeNull();
+    expect(r.readOf(bot.index)).toEqual({ suspect: other.index, reason: 'copycat' });
   });
 
   it('stops calling the primary after the per-round budget and resets on a new round', async () => {

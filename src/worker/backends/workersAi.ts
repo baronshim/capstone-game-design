@@ -3,8 +3,21 @@ import { type BotInputs, buildMessages, schemaFor } from '../prompts';
 
 /** Verified in the Workers AI catalog on 2026-09-15 (spec 5.6). */
 export const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
-/** Every reply is a tiny JSON object; 80 tokens is plenty and caps the neuron cost (spec 5.6). */
+/** Every reply is a tiny JSON object; 80 tokens is plenty and caps the neuron cost (spec 5.6). Chat also carries a suspect and a short reason. */
 export const MAX_OUTPUT_TOKENS = 80;
+export const MAX_CHAT_OUTPUT_TOKENS = 120;
+
+/** Chat runs hot so lines vary; votes warm so five bots do not converge on one seat; clues and steals cool (spec 5.6). */
+export function temperatureFor(action: BotInputs['action']): number {
+  switch (action) {
+    case 'chat':
+      return 0.9;
+    case 'vote':
+      return 0.7;
+    default:
+      return 0.3;
+  }
+}
 
 /** The slice of the Workers AI binding this backend uses, typed loosely so a model id from config type-checks. */
 export interface AiLike {
@@ -26,8 +39,8 @@ export class WorkersAiBackend implements BotBackend {
         { role: 'user', content: user },
       ],
       response_format: { type: 'json_schema', json_schema: schemaFor(inputs.action) },
-      max_tokens: MAX_OUTPUT_TOKENS,
-      temperature: inputs.action === 'chat' ? 0.8 : 0.3,
+      max_tokens: inputs.action === 'chat' ? MAX_CHAT_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+      temperature: temperatureFor(inputs.action),
       // Gemma 4 on Workers AI defaults thinking ON; without this it spends the whole token budget on reasoning and returns empty content (verified live 2026-09-16).
       chat_template_kwargs: { enable_thinking: false },
     });

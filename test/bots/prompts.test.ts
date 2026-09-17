@@ -22,6 +22,7 @@ function ctx(over: Partial<BotContext> = {}): BotContext {
     transcript: [{ seat: 0, text: 'who said round', at: 1 }],
     style: styleSheet([]),
     persona: PERSONAS[0],
+    read: null,
     ...over,
   };
 }
@@ -41,6 +42,12 @@ describe('personaFor', () => {
       const names = [0, 1, 2, 3, 4, 5].map((seat) => personaFor(seed, seat).name);
       expect(new Set(names).size).toBe(6);
     }
+  });
+
+  it('gives every persona its own lens, so bots read the clues differently', () => {
+    const lenses = new Set(PERSONAS.map((p) => p.lens));
+    expect(lenses.size).toBe(PERSONAS.length);
+    for (const p of PERSONAS) expect(p.lens.length).toBeGreaterThan(10);
   });
 
   it('has no persona that types emoji or leans on lol', () => {
@@ -139,6 +146,41 @@ describe('buildMessages', () => {
     expect(m.user).toMatch(/you have already said/i);
     expect(m.user).toContain('round is fine imo');
     expect(m.user).toMatch(/nothing new/i);
+  });
+
+  it('asks chat for a suspect and reason alongside the line, and states the move', () => {
+    const open = buildMessages({ action: 'chat', move: 'open', ...ctx() });
+    expect(open.user).toContain('"suspect"');
+    expect(open.user).toContain('"reason"');
+    expect(open.user).toMatch(/start something/i);
+    expect(open.user).toMatch(/not formed a read yet/i);
+    const question = buildMessages({ action: 'chat', move: 'question', ...ctx() });
+    expect(question.user).toMatch(/pointed question/i);
+    const defend = buildMessages({ action: 'chat', move: 'defend', ...ctx() });
+    expect(defend.user).toMatch(/you were just named/i);
+    const plain = buildMessages({ action: 'chat', ...ctx() });
+    expect(plain.user).toMatch(/react to the latest line/i);
+    expect(schemaFor('chat')).toMatchObject({ required: ['say', 'suspect', 'reason'] });
+  });
+
+  it('tells the bot to think through its own lens and to change its mind only for a reason', () => {
+    const m = buildMessages({ action: 'chat', ...ctx({ persona: PERSONAS[3] }) });
+    expect(m.system).toContain(PERSONAS[3].lens);
+    expect(m.system).toMatch(/agreeing with each other is not evidence/i);
+    expect(m.system).toMatch(/never just agree/i);
+  });
+
+  it('carries the bot\'s current read into chat and the vote, framed as steering for the imposter', () => {
+    const read = { suspect: 1, reason: 'round is too easy' };
+    const chat = buildMessages({ action: 'chat', ...ctx({ read }) });
+    expect(chat.user).toContain('Your read so far: Coral Newt, because round is too easy');
+    const vote = buildMessages({ action: 'vote', ...ctx({ read }) });
+    expect(vote.user).toContain('Coral Newt, because round is too easy');
+    expect(vote.user).toMatch(/keep your read unless/i);
+    const imp = buildMessages({ action: 'chat', ...ctx({ read, word: null, isImposter: true }) });
+    expect(imp.user).toMatch(/steering suspicion toward Coral Newt/i);
+    const impFresh = buildMessages({ action: 'vote', ...ctx({ word: null, isImposter: true }) });
+    expect(impFresh.user).toMatch(/steer suspicion/i);
   });
 
   it('asks the ejected imposter for a guess with the clues and category', () => {

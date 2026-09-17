@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { apply, createRoom, type RoomState } from '../../src/game/state';
 import type { Env } from '../../src/worker/env';
 import { makeRunner } from '../../src/worker/bots';
-import { DEFAULT_MODEL, MAX_OUTPUT_TOKENS, parseAiResponse, WorkersAiBackend, type AiLike } from '../../src/worker/backends/workersAi';
+import { DEFAULT_MODEL, MAX_CHAT_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS, parseAiResponse, WorkersAiBackend, type AiLike } from '../../src/worker/backends/workersAi';
 import { PERSONAS, schemaFor, styleSheet, type BotInputs } from '../../src/worker/prompts';
 
 function inputs(action: BotInputs['action']): BotInputs {
@@ -17,6 +17,7 @@ function inputs(action: BotInputs['action']): BotInputs {
     transcript: [],
     style: styleSheet([]),
     persona: PERSONAS[1],
+    read: null,
   };
   return action === 'clue' ? { action, pass: 1, ...ctx } : { action, ...ctx };
 }
@@ -66,8 +67,12 @@ describe('WorkersAiBackend', () => {
     expect(messages[0].content).toContain('Imposter Turing');
     expect(messages[1].content).toContain('cheese');
     await backend.run(inputs('chat'));
-    expect(ai.calls[1].inputs.temperature).toBe(0.8);
+    expect(ai.calls[1].inputs.temperature).toBe(0.9);
+    expect(ai.calls[1].inputs.max_tokens).toBe(MAX_CHAT_OUTPUT_TOKENS);
     expect(ai.calls[1].inputs.response_format).toEqual({ type: 'json_schema', json_schema: schemaFor('chat') });
+    await backend.run(inputs('vote'));
+    expect(ai.calls[2].inputs.temperature).toBe(0.7);
+    expect(ai.calls[2].inputs.max_tokens).toBe(MAX_OUTPUT_TOKENS);
   });
 
   it('lets a binding error propagate so the runner can fall back', async () => {

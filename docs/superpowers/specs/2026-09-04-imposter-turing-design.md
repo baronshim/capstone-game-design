@@ -238,7 +238,8 @@ Durable Object (see section 3); question-answer deadlines (m4) use the alarm.
 - Start with 0 humans: refused.
 - Room creation is limited to 5 rooms per minute per client IP, counted in
   Worker memory (best effort, resets when the isolate restarts).
-- Per-room budget of 40 live API calls per round. Over budget, bots go
+- Per-room budget of 60 live API calls per round (raised from 40 on
+  2026-09-16 when chat ticks and reply ticks were added). Over budget, bots go
   silent in chat and use rule-based votes (vote for the seat with the most
   accusations against it, else random non-self).
 
@@ -247,9 +248,12 @@ Durable Object (see section 3); question-answer deadlines (m4) use the alarm.
 ### 5.1 Persona
 
 At round start each bot seat gets a persona: typing habits (case,
-punctuation, length), mood, a hobby or two for small talk, and a secret
-"tell it is hiding". Personas are drawn from a small hand-written pool using the round seed, so
-a round is reproducible from its seed.
+punctuation, length), mood, a hobby or two for small talk, a secret
+"tell it is hiding", and a lens: the kind of thing this player notices
+first in the clues (too-generic clues, clues that piggyback on the one
+before, who accuses loudest, who goes quiet). Personas are drawn from a small hand-written pool using the round seed, so
+a round is reproducible from its seed. Different lenses keep five bots
+from reaching one shared verdict from the same transcript.
 
 ### 5.2 Actions and schemas
 
@@ -280,17 +284,35 @@ includes it as "the room writes like this; blend in." Bots are also told to
 play the game genuinely: give real clues, notice weak clues, accuse, and
 defend, because non-engagement is the biggest tell.
 
-### 5.4 Honesty in free chat
+### 5.4 Honesty in free chat, and a mind of its own
 
 Enforcement applies only to menu questions. In free chat a bot is told its
 role and asked to stay in character (Knaves bluff, Knights avoid
 fabrication). This is soft, as it is for humans.
 
+Each bot forms and keeps its own read (added 2026-09-16). Every chat reply
+carries `suspect` and a short `reason` alongside the line, including a
+silent reply, and the Room object remembers the latest per seat for the
+round. The next chat tick and the vote are shown that read and told to
+keep it unless the chat gave a concrete reason to move, and that other
+players agreeing with each other is not evidence. Nothing is dealt to the
+bot: the read is its own conclusion, revised by its own later calls. The
+imposter bot's read is the seat it is steering suspicion toward. Lines
+that only agree ("yeah same", "agreed, fox") are rejected server-side.
+
 ### 5.5 Pacing
 
-During interrogation each bot gets 2 to 4 chances to speak at jittered
-times. Before posting, a chat line is delayed by a typing-time simulation
-proportional to its length so replies do not land instantly.
+During the chat each bot gets 3 to 5 scheduled chances to speak at
+jittered times; two bots open within 2 to 6 seconds and the rest spread to
+80 seconds. Each scheduled tick carries a move (open, question, disagree,
+defend, aside, react) so bots start threads and push back rather than only
+echoing the latest line; the round's first tick is always an open. A line
+posted during the chat also owes reply ticks: a bot named by one word of
+its call sign replies to defend itself 2.5 to 7 seconds later (90%), else
+one bot may react (60% after a human line, 30% after a bot line, so
+bot-to-bot chains stay short). A bot posts at most 5 lines per round.
+Before posting, a chat line is delayed by a typing-time simulation of 30ms
+per character, capped at 2.5 seconds, so replies do not land instantly.
 
 ### 5.6 Model settings
 
@@ -303,8 +325,10 @@ over.
 Default model is Gemma 4 26B (`@cf/google/gemma-4-26b-a4b-it`), about 15
 neurons per bot call at roughly 1,500 input and 40 output tokens, so around
 650 calls or 20 to 30 full rounds per day. `BOT_MODEL` overrides it. Each
-call uses the JSON schema `response_format`, `max_completion_tokens` of 80,
-and a temperature around 0.8 for chat and 0.3 for votes and clues. Gemma 4's
+call uses the JSON schema `response_format`, `max_tokens` of 80 (120 for
+chat, which also returns a suspect and reason), and a temperature of 0.9
+for chat, 0.7 for votes so five bots do not converge on one seat, and 0.3
+for clues and steals. Gemma 4's
 thinking mode is sent OFF explicitly via `chat_template_kwargs: { enable_thinking: false }`. Verified live 2026-09-16: this Workers AI Gemma 4 build defaults thinking ON, and without the flag it spends the whole 80-token budget on `reasoning_content` and returns empty `content`, so every bot call would fall back to scripted.
 A call that has not returned after 5 seconds is abandoned (the promise is
 raced against a timer; the binding has no cancel) and counts as failed.
