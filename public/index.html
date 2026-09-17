@@ -20,9 +20,8 @@
       --line: #263153;
       --line-soft: #1c2540;
       --ink: #eef1fb;
-      --muted: #9aa5c6;
-      --faint: #667architecture;
-      --faint: #6b769b;
+      --muted: #aab4d2;
+      --faint: #7d88ad;
       --accent: #56e0c8;
       --accent-ink: #06231e;
       --accent-dim: rgba(86, 224, 200, 0.14);
@@ -178,15 +177,28 @@
 
     /* ---- room status bar ---- */
     .statusbar {
+      position: sticky;
+      top: 8px;
+      z-index: 5;
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       background: var(--panel);
-      border: 1px solid var(--line-soft);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       margin-bottom: 14px;
+      box-shadow: 0 8px 24px -12px rgba(0,0,0,.8);
     }
+    .icon-btn {
+      flex: none;
+      width: 36px; height: 36px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--display); font-size: 16px; font-weight: 700;
+      color: var(--muted); background: var(--field);
+      border-radius: 999px;
+    }
+    .icon-btn:hover { color: var(--ink); }
     .room-code {
       font-family: var(--display);
       font-weight: 700;
@@ -195,12 +207,12 @@
       color: var(--ink);
     }
     .code-label {
-      font-family: var(--mono); font-size: 9px; letter-spacing: .2em;
+      font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
       text-transform: uppercase; color: var(--faint); display: block; margin-bottom: 1px;
     }
     .phase-pill {
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--accent);
@@ -213,10 +225,10 @@
     .timer {
       font-family: var(--mono);
       font-weight: 600;
-      font-size: 20px;
+      font-size: 22px;
       font-variant-numeric: tabular-nums;
       color: var(--ink);
-      min-width: 2.6ch;
+      min-width: 2.8ch;
       text-align: right;
     }
     .timer.low { color: var(--warn); }
@@ -224,7 +236,7 @@
     .timer:empty { display: none; }
 
     .notice {
-      font-size: 13px;
+      font-size: 14px;
       color: var(--warn);
       background: rgba(255,206,92,.10);
       border: 1px solid rgba(255,206,92,.28);
@@ -263,7 +275,7 @@
       color: var(--bad); border: 1px solid rgba(255,125,107,.5);
       border-radius: 999px; padding: 4px 12px; margin-bottom: 12px;
     }
-    .card-note { color: var(--muted); font-size: 14px; margin-top: 10px; }
+    .card-note { color: var(--muted); font-size: 15px; margin-top: 10px; }
 
     /* ---- seats ---- */
     #seats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -277,6 +289,11 @@
       border-radius: var(--radius-sm);
     }
     .seat.off { opacity: 0.45; }
+    /* During the chat the seats pack into two columns so the transcript and composer sit higher on the screen. */
+    #seats.compact { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #seats.compact .seat { flex-wrap: wrap; padding: 7px 10px; gap: 4px 8px; }
+    #seats.compact .alias { font-size: 15px; }
+    #seats.compact .clues { margin-left: 0; width: 100%; justify-content: flex-start; }
     .seat.turn {
       border-color: var(--seat);
       box-shadow: 0 0 0 1px var(--seat), 0 0 18px -6px var(--seat);
@@ -286,7 +303,7 @@
     .seat.turn .dot { animation: pulse 1.4s ease-in-out infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
     .alias {
-      font-family: var(--display); font-weight: 600; font-size: 15px;
+      font-family: var(--display); font-weight: 600; font-size: 16px;
       color: var(--seat);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
@@ -299,8 +316,8 @@
       margin-left: auto; display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end;
     }
     .clue-chip {
-      font-family: var(--mono); font-size: 11px;
-      color: var(--muted); background: var(--field);
+      font-family: var(--mono); font-size: 12px;
+      color: var(--ink); background: var(--field);
       border: 1px solid var(--line-soft); border-radius: 6px; padding: 2px 7px;
       white-space: nowrap;
     }
@@ -308,8 +325,18 @@
 
     /* ---- turn banner ---- */
     #turn { margin: 0 0 12px; font-size: 15px; color: var(--muted); }
-    #turn .turn-you { color: var(--accent); font-weight: 600; }
     #turn b { color: var(--ink); }
+    #turn.mine {
+      font-family: var(--display); font-size: 17px; color: var(--accent-ink);
+      background: var(--accent); border-radius: var(--radius-sm); padding: 10px 14px; text-align: center;
+    }
+    #turn.mine .pass { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; opacity: .75; margin-bottom: 2px; }
+    .verdict {
+      text-align: center; font-size: 15px; color: var(--muted);
+      background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
+      padding: 10px 12px; margin: 0 0 12px;
+    }
+    .verdict b { color: var(--ink); font-family: var(--display); }
 
     /* ---- forms in room ---- */
     .row { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -326,8 +353,11 @@
       background: var(--panel); border-color: var(--line-soft);
       border-left: 3px solid var(--seat);
     }
-    .vote-row .alias { font-size: 15px; }
+    .vote-row .alias { font-size: 16px; }
     .vote-row:hover { border-color: var(--seat); }
+    .vote-row.on { border-color: var(--seat); box-shadow: 0 0 0 1px var(--seat); background: var(--panel-2); }
+    .vote-row .picked { margin-left: auto; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--seat); }
+    .prompt-sub { color: var(--muted); font-size: 14px; margin: -6px 0 10px; }
 
     #botcall { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
     .call-row {
@@ -338,7 +368,7 @@
       border-left: 3px solid var(--seat); border-radius: var(--radius-sm);
     }
     .callbtns { margin-left: auto; display: flex; gap: 6px; flex: none; }
-    .callbtns button { padding: 7px 12px; font-size: 13px; }
+    .callbtns button { padding: 7px 12px; font-size: 14px; }
     .callbtns button.on[data-call="human"] { background: var(--good); color: #06210f; border-color: transparent; }
     .callbtns button.on[data-call="bot"] { background: var(--warn); color: #2a2100; border-color: transparent; }
 
@@ -353,7 +383,7 @@
     }
     .reveal-headline.crew { color: var(--good); }
     .reveal-headline.imposter { color: var(--bad); }
-    .reveal-sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+    .reveal-sub { text-align: center; color: var(--muted); font-size: 15px; margin-bottom: 16px; }
     .reveal-sub b { color: var(--ink); font-family: var(--display); }
     .reveal-list { display: flex; flex-direction: column; gap: 5px; }
     .reveal-seat {
@@ -363,23 +393,24 @@
       border: 1px solid var(--line-soft); border-left: 3px solid var(--seat);
       border-radius: var(--radius-sm);
     }
-    .reveal-seat .alias { font-size: 14px; }
-    .reveal-seat .who { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .reveal-seat .alias { font-size: 15px; }
+    .reveal-seat .who { font-family: var(--mono); font-size: 12px; color: var(--muted); }
     .reveal-seat .who.bot { color: var(--warn); }
     .tag-imp {
       font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
       color: var(--bad); border: 1px solid rgba(255,125,107,.5); border-radius: 4px; padding: 1px 6px;
     }
-    .reveal-votes { font-size: 12px; color: var(--faint); grid-column: 1 / -1; }
+    .reveal-votes { font-size: 13px; color: var(--faint); grid-column: 1 / -1; }
     .scores {
       margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft);
-      font-size: 13px; color: var(--muted);
+      font-size: 14px; color: var(--muted);
     }
     .scores b { color: var(--accent); }
 
     /* ---- chat log ---- */
     #log {
       height: 38vh; min-height: 160px; overflow-y: auto;
+      margin-top: 4px;
       background: var(--field); border: 1px solid var(--line-soft);
       border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px;
     }
@@ -387,16 +418,47 @@
       content: "Transmission channel open.";
       color: var(--faint); font-family: var(--mono); font-size: 12px;
     }
-    .line { margin: 5px 0; font-size: 14px; overflow-wrap: anywhere; }
+    #log.readonly { height: 26vh; min-height: 120px; }
+    .log-label { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); margin: 14px 2px 4px; }
+    .line { margin: 6px 0; font-size: 15px; overflow-wrap: anywhere; }
     .line .who { font-family: var(--display); font-weight: 600; margin-right: 7px; color: var(--seat, var(--accent)); }
 
     /* ---- misc ---- */
     .stack { display: flex; flex-direction: column; gap: 10px; }
     #start, #again, #lock-calls { width: 100%; }
-    #start, #again { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-family: var(--display); letter-spacing: .03em; }
-    #steal-wait { color: var(--muted); font-size: 14px; text-align: center; padding: 10px; }
-    .hint { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 10px 2px 0; }
-    .error { color: var(--bad); min-height: 1.2em; font-size: 14px; margin: 4px 0 0; text-align: center; }
+    #start, #again { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-family: var(--display); letter-spacing: .03em; font-size: 16px; }
+    #again { margin-bottom: 16px; }
+    #steal-wait { color: var(--muted); font-size: 15px; text-align: center; padding: 10px; }
+    .hint { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 12px 2px 0; }
+    .lobby-tools { display: flex; gap: 8px; margin-top: 12px; }
+    .lobby-tools button { flex: 1; font-size: 14px; }
+    .btn-ghost { background: transparent; color: var(--muted); border-color: var(--line-soft); }
+    .btn-ghost:hover { color: var(--ink); }
+    .error {
+      /* Just under the sticky room header, where the eye already is for the timer. */
+      position: fixed; left: 50%; top: calc(74px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+      z-index: 20; max-width: min(92vw, 440px);
+      color: #2a0c08; background: var(--bad); font-weight: 600; font-size: 15px;
+      padding: 10px 16px; border-radius: 999px; text-align: center;
+      box-shadow: 0 10px 30px -10px rgba(0,0,0,.9);
+    }
+    .error:empty { display: none; }
+
+    /* ---- how to play ---- */
+    dialog {
+      width: min(92vw, 440px); max-height: 86dvh; overflow-y: auto;
+      color: var(--ink); background: var(--panel);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 20px;
+    }
+    dialog::backdrop { background: rgba(3,5,12,.7); }
+    dialog h2 { font-family: var(--display); font-size: 24px; margin: 0 0 4px; }
+    dialog .sub { color: var(--muted); font-size: 15px; margin: 0 0 16px; }
+    dialog ol { padding-left: 20px; margin: 0 0 16px; }
+    dialog li { margin: 0 0 10px; font-size: 15px; line-height: 1.5; }
+    dialog li b { font-family: var(--display); color: var(--accent); }
+    dialog .tip { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 12px; margin: 0 0 16px; }
+    dialog form { margin: 0; }
+    dialog form button { width: 100%; }
     footer { margin-top: 22px; text-align: center; }
     .footnote { color: var(--faint); font-size: 11px; font-family: var(--mono); letter-spacing: .08em; }
 
@@ -423,16 +485,20 @@
         <input id="code" placeholder="Code" maxlength="4" autocapitalize="characters">
         <button id="join">Join</button>
       </div>
+
+      <button id="help-home" class="btn-ghost" style="width:100%;margin-top:22px">How to play</button>
     </section>
 
     <section id="room" hidden>
       <div class="statusbar">
+        <button id="leave" class="icon-btn" title="Leave room" aria-label="Leave room">&larr;</button>
         <div>
           <span class="code-label">Room</span>
           <span id="room-code" class="room-code"></span>
         </div>
         <span id="phase" class="phase-pill"></span>
         <span id="timer" class="timer"></span>
+        <button id="help-room" class="icon-btn" title="How to play" aria-label="How to play">?</button>
       </div>
 
       <p id="notice" class="notice" hidden>Bots are on autopilot today — the daily AI budget is used up, so they play by script.</p>
@@ -442,13 +508,19 @@
       <div id="seats"></div>
 
       <button id="start" hidden>Start the round</button>
-      <p id="lobby-hint" class="hint" hidden>Share the room code above. Empty seats fill with AI players trying to pass as human — best with three or more people. Start when everyone's in.</p>
+      <p id="lobby-hint" class="hint" hidden></p>
+      <div id="lobby-tools" class="lobby-tools" hidden>
+        <button id="copy-link" class="btn-ghost">Copy invite link</button>
+        <button id="help-lobby" class="btn-ghost">How to play</button>
+      </div>
 
       <p id="turn" hidden></p>
       <form id="clue-form" class="row" hidden>
         <input id="clue" maxlength="20" autocomplete="off" placeholder="One-word clue">
         <button class="btn-primary" style="width:auto">Send</button>
       </form>
+
+      <p id="verdict" class="verdict" hidden></p>
 
       <div id="vote" hidden></div>
 
@@ -464,6 +536,7 @@
       <div id="reveal" hidden></div>
       <button id="again" hidden>Play again</button>
 
+      <p id="log-label" class="log-label" hidden>What was said</p>
       <div id="log" hidden></div>
       <form id="composer" class="row" hidden>
         <input id="text" maxlength="280" autocomplete="off" placeholder="Say something…">
@@ -472,6 +545,22 @@
     </section>
 
     <p id="error" class="error"></p>
+
+    <dialog id="help">
+      <h2>How to play</h2>
+      <p class="sub">Six seats. One never learned the word. Some are machines.</p>
+      <ol>
+        <li><b>Lobby.</b> Share the room code. Any seat nobody takes is filled by an AI player pretending to be human.</li>
+        <li><b>Clues.</b> Everyone gets a call sign and the secret word. The imposter only sees the category. Two rounds of one-word clues, 20 seconds each. Hint at the word without giving it away.</li>
+        <li><b>Chat.</b> 90 seconds to argue. Whose clues were vague? Who sounds like a machine?</li>
+        <li><b>Vote.</b> 20 seconds. A majority ejects one seat. You can change your pick until time runs out.</li>
+        <li><b>Steal.</b> If the ejected seat is the imposter, they get 15 seconds to guess the word and win anyway.</li>
+        <li><b>Bot call.</b> 20 seconds to mark every other seat Human or Bot. One point per correct call.</li>
+        <li><b>Reveal.</b> Names, bots, the imposter, the votes, the word, and your score.</li>
+      </ol>
+      <p class="tip">Crew wins if the imposter is ejected and misses the steal. The imposter wins by surviving the vote or guessing the word.</p>
+      <form method="dialog"><button class="btn-primary">Got it</button></form>
+    </dialog>
 
     <footer><span class="footnote">imposter turing · signal or noise?</span></footer>
   </main>

@@ -96,21 +96,41 @@ export function turnHtml(snap: Snapshot): string {
   if (snap.phase !== 'clue' || !snap.round || snap.round.clueSeat === null) return '';
   const pass = `Round ${snap.round.cluePass} of 2`;
   if (snap.round.clueSeat === snap.you) {
-    return `${pass} · <span class="turn-you">your turn — one word</span>`;
+    return `<span class="pass">${pass}</span>Your turn: type one word that hints at the word`;
   }
   const color = seatColor(snap, snap.round.clueSeat);
   return `${pass} · waiting for <b style="color:${color}">${esc(nameOf(snap, snap.round.clueSeat))}</b>…`;
 }
 
-export function voteHtml(snap: Snapshot): string {
+/** Lobby copy that counts the seats, so the host knows how many bots will fill in. */
+export function lobbyHint(snap: Snapshot): string {
+  const humans = snap.seats.length;
+  const bots = 6 - humans;
+  const fill = bots === 0 ? 'The room is full.' : `${bots === 1 ? 'The empty seat' : `The ${bots} empty seats`} will be AI players trying to pass as human.`;
+  return `${humans} of 6 seats taken. ${fill} Share the code or the link to bring friends in, then start when everyone is here.`;
+}
+
+/** Who the vote ejected, shown through the steal and the bot call before the full reveal. */
+export function verdictHtml(snap: Snapshot): string {
+  const r = snap.round;
+  if (!r || (snap.phase !== 'steal' && snap.phase !== 'botcall')) return '';
+  if (r.ejected === null) return 'No majority. Nobody was ejected.';
+  const color = seatColor(snap, r.ejected);
+  const who = `<b style="color:${color}">${esc(nameOf(snap, r.ejected))}</b>`;
+  return snap.phase === 'steal' ? `${who} was ejected and is the imposter.` : `${who} was ejected.`;
+}
+
+/** One row per other seat; `myVote` is the viewer's current pick, changeable until the phase ends. */
+export function voteHtml(snap: Snapshot, myVote: number | null): string {
   const buttons = snap.seats
     .filter((s) => s.index !== snap.you)
-    .map(
-      (s) =>
-        `<button class="vote-row" data-seat="${s.index}" style="--seat:${seatColor(snap, s.index)}"><i class="dot"></i><span class="alias">${esc(nameOf(snap, s.index))}</span></button>`,
-    )
+    .map((s) => {
+      const on = s.index === myVote;
+      return `<button class="vote-row${on ? ' on' : ''}" data-seat="${s.index}" style="--seat:${seatColor(snap, s.index)}"><i class="dot"></i><span class="alias">${esc(nameOf(snap, s.index))}</span>${on ? '<span class="picked">your vote</span>' : ''}</button>`;
+    })
     .join('');
-  return `<p class="prompt">Who is the imposter?</p>${buttons}`;
+  const sub = myVote === null ? 'Tap a seat. You can change your mind until the timer ends.' : 'Vote in. Tap another seat to change it.';
+  return `<p class="prompt">Who is the imposter?</p><p class="prompt-sub">${sub}</p>${buttons}`;
 }
 
 export function revealHtml(snap: Snapshot): string {

@@ -1,5 +1,5 @@
 import type { BotCall, ClientMessage, Phase, ServerMessage, Snapshot } from '../game/protocol';
-import { botcallHtml, cardHtml, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, voteHtml } from './views';
+import { botcallHtml, cardHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, verdictHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -23,6 +23,8 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let lastClueCount = 0;
 /** The viewer's unsent Human/Bot picks during the bot call, reset whenever the phase changes. */
 let pendingCalls: BotCall[] = [];
+/** The seat the viewer last voted for this phase, so the pick stays highlighted. */
+let myVote: number | null = null;
 let lastPhase: Phase | null = null;
 
 function showError(message: string): void {
@@ -65,6 +67,26 @@ function connect(code: string): void {
   };
 }
 
+/** Back to the home screen: drop the socket, forget the room, and clear the room from the URL. */
+function leave(): void {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (socket) {
+    socket.onclose = null;
+    socket.close();
+    socket = null;
+  }
+  snapshot = null;
+  lastPhase = null;
+  roomCode = '';
+  showError('');
+  history.replaceState(null, '', location.pathname);
+  $('room').hidden = true;
+  $('home').hidden = false;
+}
+
 function handle(msg: ServerMessage): void {
   if (msg.type === 'error') {
     showError(msg.message);
@@ -95,6 +117,7 @@ function render(): void {
 
   if (ph !== lastPhase) {
     pendingCalls = snap.seats.map(() => null);
+    myVote = null;
     lastPhase = ph;
   }
 
@@ -107,10 +130,16 @@ function render(): void {
   show('card', snap.round !== null && ph !== 'lobby');
   $('card').innerHTML = cardHtml(snap);
   $('seats').innerHTML = seatsHtml(snap);
+  $('seats').classList.toggle('compact', ph === 'chat');
   show('start', ph === 'lobby' && seated);
   show('lobby-hint', ph === 'lobby' && seated);
+  show('lobby-tools', ph === 'lobby' && seated);
+  $('lobby-hint').textContent = lobbyHint(snap);
   show('turn', ph === 'clue');
   $('turn').innerHTML = turnHtml(snap);
+  $('turn').classList.toggle('mine', myTurn);
+  show('verdict', ph === 'steal' || ph === 'botcall');
+  $('verdict').innerHTML = verdictHtml(snap);
   show('clue-form', myTurn);
   // Clear the box on a fresh turn: either it left this seat, or it came back to
   // this seat with a new clue recorded since the last render (one human with
@@ -119,7 +148,7 @@ function render(): void {
   if (!myTurn || myClueCount > lastClueCount) $<HTMLInputElement>('clue').value = '';
   lastClueCount = myClueCount;
   show('vote', ph === 'vote');
-  $('vote').innerHTML = voteHtml(snap);
+  $('vote').innerHTML = voteHtml(snap, myVote);
   show('steal-form', ph === 'steal' && imposter);
   show('steal-wait', ph === 'steal' && !imposter);
   show('botcall', ph === 'botcall' && seated);
@@ -128,9 +157,13 @@ function render(): void {
   show('reveal', ph === 'reveal');
   $('reveal').innerHTML = revealHtml(snap);
   show('again', ph === 'reveal' && seated);
-  show('log', chatOpen);
+  // The transcript stays readable while deciding: the vote, the steal, and the bot call all turn on what was said.
+  const logVisible = chatOpen || ph === 'vote' || ph === 'steal' || ph === 'botcall';
+  show('log', logVisible);
+  show('log-label', logVisible && !chatOpen);
   show('composer', chatOpen);
   const log = $('log');
+  log.classList.toggle('readonly', !chatOpen);
   log.innerHTML = logHtml(snap);
   log.scrollTop = log.scrollHeight;
 
@@ -141,7 +174,15 @@ function render(): void {
 
 function tick(): void {
   const end = snapshot?.phaseEndsAt ?? null;
-  $('timer').textContent = end === null ? '' : `${Math.max(0, Math.ceil((end - Date.now()) / 1000))}s`;
+  const timer = $('timer');
+  if (end === null) {
+    timer.textContent = '';
+    timer.className = 'timer';
+    return;
+  }
+  const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  timer.textContent = `${left}s`;
+  timer.className = `timer${left === 0 ? ' out' : left <= 5 ? ' low' : ''}`;
 }
 setInterval(tick, 250);
 
@@ -154,6 +195,28 @@ $('create').onclick = async () => {
 $('join').onclick = () => connect($<HTMLInputElement>('code').value);
 $('start').onclick = () => send({ type: 'start' });
 $('again').onclick = () => send({ type: 'again' });
+$('leave').onclick = leave;
+
+const help = $<HTMLDialogElement>('help');
+for (const id of ['help-home', 'help-room', 'help-lobby']) {
+  $(id).onclick = () => {
+    help.showModal();
+    // showModal focuses the first control, which is the close button at the bottom; start at the top instead.
+    help.scrollTop = 0;
+  };
+}
+
+$('copy-link').onclick = async () => {
+  const url = `${location.origin}${location.pathname}?room=${roomCode}`;
+  const button = $('copy-link');
+  try {
+    await navigator.clipboard.writeText(url);
+    button.textContent = 'Link copied';
+  } catch {
+    button.textContent = url;
+  }
+  setTimeout(() => (button.textContent = 'Copy invite link'), 2500);
+};
 
 $<HTMLFormElement>('composer').onsubmit = (e) => {
   e.preventDefault();
@@ -175,7 +238,10 @@ $<HTMLFormElement>('steal-form').onsubmit = (e) => {
 
 $('vote').onclick = (e) => {
   const button = (e.target as HTMLElement).closest('button');
-  if (button?.dataset.seat !== undefined) send({ type: 'vote', seat: Number(button.dataset.seat) });
+  if (button?.dataset.seat === undefined) return;
+  myVote = Number(button.dataset.seat);
+  send({ type: 'vote', seat: myVote });
+  render();
 };
 
 $('botcall').onclick = (e) => {
@@ -191,6 +257,10 @@ const nameInput = $<HTMLInputElement>('name');
 const savedName = localStorage.getItem('name');
 if (savedName) nameInput.value = savedName;
 nameInput.addEventListener('change', () => localStorage.setItem('name', nameInput.value));
+
+$<HTMLInputElement>('code').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') connect($<HTMLInputElement>('code').value);
+});
 
 const roomParam = new URLSearchParams(location.search).get('room');
 if (roomParam) {
