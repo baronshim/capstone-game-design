@@ -57,7 +57,31 @@ export function readFrom(inputs: BotInputs, raw: unknown): Read | null {
 }
 
 /** Chat lines a bot may post per round; a talkative human manages about this many in 90 seconds. */
-export const MAX_BOT_LINES_PER_ROUND = 5;
+export const MAX_BOT_LINES_PER_ROUND = 4;
+/** A bot never posts two lines closer together than this; people do not double-post half a second apart. */
+export const MIN_BOT_GAP_MS = 8000;
+
+/** True when the seat is still under its line cap and its last line is old enough (spec 5.5). */
+export function canSpeak(state: RoomState, seat: number, now: number): boolean {
+  const mine = state.transcript.filter((l) => l.seat === seat);
+  if (mine.length >= MAX_BOT_LINES_PER_ROUND) return false;
+  const last = mine[mine.length - 1];
+  return !last || now - last.at >= MIN_BOT_GAP_MS;
+}
+
+/**
+ * Re-runs the chat checks against the current room right before a line is
+ * posted. Turns run concurrently and the typing delay sits between validation
+ * and dispatch, so a line that was fine when the model answered may since have
+ * been said by someone else, or the bot may have just spoken.
+ */
+export function recheckChat(state: RoomState, turn: BotTurn, text: string, now: number): boolean {
+  if (state.phase !== 'chat' || !state.round) return false;
+  if (!canSpeak(state, turn.seat, now)) return false;
+  const inputs = buildInputs(state, { ...turn, action: 'chat' });
+  if (inputs.action !== 'chat') return false;
+  return chatLineProblem(text, inputs) === null;
+}
 
 /** Openers of a line that only agrees with someone. */
 const AGREE = /^(yeah|yep|yea|ya|yup|same|agreed?|true|exactly|right|this|facts|i agree|i think so too|good point|fair)\b/i;
@@ -128,7 +152,7 @@ export function validateOutput(state: RoomState, inputs: BotInputs, raw: unknown
       if (typeof out.say !== 'string') return { ok: false, reason: 'say-missing' };
       const text = out.say.trim();
       if (!text) return { ok: true, event: null };
-      if (inputs.transcript.filter((l) => l.seat === inputs.seat).length >= MAX_BOT_LINES_PER_ROUND) return { ok: true, event: null };
+      if (!canSpeak(state, inputs.seat, at)) return { ok: true, event: null };
       if (text.length > MAX_BOT_LINE) return { ok: false, reason: 'say-too-long' };
       if (mentionsWord(text, word)) return { ok: false, reason: 'say-leaks-word' };
       const problem = chatLineProblem(text, inputs);
@@ -196,6 +220,8 @@ export class BotRunner {
       this.primaryCalls = 0;
       this.reads.clear();
     }
+    // A bot that cannot post anyway does not spend a model call.
+    if (turn.action === 'chat' && !canSpeak(state, turn.seat, this.opts.now())) return null;
     const inputs = buildInputs(state, turn, this.reads.get(turn.seat) ?? null);
     if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < this.opts.budgetPerRound) {
       this.primaryCalls++;

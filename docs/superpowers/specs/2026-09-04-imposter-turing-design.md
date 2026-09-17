@@ -310,9 +310,12 @@ echoing the latest line; the round's first tick is always an open. A line
 posted during the chat also owes reply ticks: a bot named by one word of
 its call sign replies to defend itself 2.5 to 7 seconds later (90%), else
 one bot may react (60% after a human line, 30% after a bot line, so
-bot-to-bot chains stay short). A bot posts at most 5 lines per round.
+bot-to-bot chains stay short). A bot posts at most 4 lines per round and
+never two within 8 seconds; a tick it cannot use costs no model call.
 Before posting, a chat line is delayed by a typing-time simulation of 30ms
-per character, capped at 2.5 seconds, so replies do not land instantly.
+per character, capped at 2.5 seconds, so replies do not land instantly, and
+then rechecked against the room, because turns run concurrently and another
+bot may have made the same point while this one was "typing".
 
 ### 5.6 Model settings
 

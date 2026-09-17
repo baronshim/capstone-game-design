@@ -3,7 +3,7 @@ import type { Env } from './env';
 import { apply, createRoom, type BotTurn, type Event, type RoomState } from '../game/state';
 import { redact } from '../game/redact';
 import type { ClientMessage, ServerMessage } from '../game/protocol';
-import { type BotRunner, makeRunner } from './bots';
+import { type BotRunner, makeRunner, recheckChat } from './bots';
 
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
 /** Typing-time simulation for bot chat (spec 5.5): 30ms per character, at most 2.5s. */
@@ -204,10 +204,14 @@ export class RoomObject extends DurableObject<Env> {
       if (!this.state?.round || this.state.round.seed !== seed) return;
       const event = await this.runner.turn(this.state, turn);
       if (!event) return;
-      if (event.type === 'botChat' && !this.instant) {
-        await new Promise((r) => setTimeout(r, Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length)));
+      if (event.type !== 'botChat') {
+        await this.dispatch(event);
+        return;
       }
-      await this.dispatch(event);
+      if (!this.instant) await new Promise((r) => setTimeout(r, Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length)));
+      // Another bot may have said it, or this one may have just spoken, while the line was "being typed".
+      if (!this.state || !recheckChat(this.state, turn, event.text, Date.now())) return;
+      await this.dispatch({ ...event, at: Date.now() });
     } catch (err) {
       console.warn(`bot ${turn.action} for seat ${turn.seat} failed: ${err instanceof Error ? err.message : String(err)}`);
     }

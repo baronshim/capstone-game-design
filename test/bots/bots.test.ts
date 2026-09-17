@@ -4,6 +4,8 @@ import { CATEGORIES } from '../../src/game/words';
 import {
   BotRunner,
   buildInputs,
+  canSpeak,
+  recheckChat,
   isQuotaError,
   mentionsWord,
   nextUtcMidnight,
@@ -142,18 +144,37 @@ describe('validateOutput', () => {
     });
   });
 
-  it('lets a bot use emoji once a human has, and silences a bot after its fifth line', () => {
+  it('lets a bot use emoji once a human has, and silences a bot after its fourth line or within 8s of its last', () => {
     let s = inChat();
     const bot = s.seats.find((x) => x.kind === 'bot')!;
     s = apply(s, { type: 'chat', playerId: 'p0', text: 'ok 😀', at: 5 }).state;
     let inputs = buildInputs(s, turn(bot.index, 'chat'));
     expect(validateOutput(s, inputs, { say: 'hm 🤔' }, 9)).toMatchObject({ ok: true });
-    for (let i = 0; i < 4; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 6 + i }).state;
+    for (let i = 0; i < 3; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 10_000 * (i + 1) }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
-    expect(validateOutput(s, inputs, { say: 'still fine' }, 9)).toMatchObject({ ok: true, event: { text: 'still fine' } });
-    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 4', at: 10 }).state;
+    expect(canSpeak(s, bot.index, 30_500)).toBe(false);
+    expect(validateOutput(s, inputs, { say: 'too soon' }, 30_500)).toEqual({ ok: true, event: null });
+    expect(canSpeak(s, bot.index, 38_000)).toBe(true);
+    expect(validateOutput(s, inputs, { say: 'still fine' }, 38_000)).toMatchObject({ ok: true, event: { text: 'still fine' } });
+    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 3', at: 38_000 }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
-    expect(validateOutput(s, inputs, { say: 'one more thing' }, 9)).toEqual({ ok: true, event: null });
+    expect(validateOutput(s, inputs, { say: 'one more thing' }, 60_000)).toEqual({ ok: true, event: null });
+  });
+
+  it('recheckChat drops a line another seat has since said, or one the bot cannot post anymore', () => {
+    let s = inChat();
+    const [a, b] = s.seats.filter((x) => x.kind === 'bot');
+    const t = turn(b.index, 'chat', 'react');
+    expect(recheckChat(s, t, 'fruit does not fit', 9)).toBe(true);
+    s = apply(s, { type: 'botChat', seat: a.index, text: 'fruit does not fit at all', at: 6 }).state;
+    expect(recheckChat(s, t, 'fruit does not fit', 9)).toBe(false);
+    expect(recheckChat(s, t, 'why paws though', 9)).toBe(true);
+    s = apply(s, { type: 'botChat', seat: b.index, text: 'ok', at: 7 }).state;
+    expect(recheckChat(s, t, 'why paws though', 9)).toBe(false);
+    expect(recheckChat(s, t, 'why paws though', 20_000)).toBe(true);
+    const voting = apply(s, { type: 'timeout', at: 200_000 }).state;
+    expect(voting.phase).toBe('vote');
+    expect(recheckChat(voting, t, 'why paws though', 200_001)).toBe(false);
   });
 
   it('pureAgreement catches lines that only agree and lets lines with a reason through', () => {
@@ -304,6 +325,15 @@ describe('BotRunner', () => {
     const fallback = stub({ clue: 'fall' });
     const r = runner(primary, fallback, { timeoutMs: 20 });
     expect(await r.turn(clueState, clueTurn)).toMatchObject({ word: 'fall' });
+  });
+
+  it('spends no model call on a chat turn for a bot that cannot post', async () => {
+    let s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    s = apply(s, { type: 'botChat', seat: bot.index, text: 'hm', at: 4990 }).state;
+    const primary = stub({ say: 'more', suspect: (bot.index + 1) % 6, reason: 'x' });
+    expect(await runner(primary, new ScriptedBackend()).turn(s, turn(bot.index, 'chat'))).toBeNull();
+    expect(primary.calls).toBe(0);
   });
 
   it('returns null for a silent chat without falling back, and null when the fallback fails too', async () => {
