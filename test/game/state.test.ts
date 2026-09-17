@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { apply, createRoom, MAX_CHAT_LENGTH, MAX_TRANSCRIPT, SEAT_COUNT, type BotTurn, type Result, type RoomState } from '../../src/game/state';
 import type { Effect, Event } from '../../src/game/state';
-import { DURATIONS } from '../../src/game/rules';
+import { DURATIONS, POINTS } from '../../src/game/rules';
 import { CATEGORIES } from '../../src/game/words';
 import type { BotCall } from '../../src/game/protocol';
 
@@ -72,7 +72,7 @@ describe('join', () => {
     expect(state.seats).toHaveLength(2);
     expect(state.seats[1]).toEqual({
       index: 1, kind: 'human', alias: null, playerId: 'p1', displayName: 'Bob', connected: true,
-      isImposter: false, clues: [], vote: null, botCalls: null, score: null,
+      isImposter: false, clues: [], vote: null, botCalls: null, score: null, points: null, total: 0,
     });
   });
 
@@ -478,7 +478,8 @@ describe('bot-call phase', () => {
     expect(s.phaseEndsAt).toBe(100 + DURATIONS.botcall);
     expect(s.round!.ejected).toBe(crewOf(inVote())[0].index);
     expect(s.round!.result).toBe('imposter');
-    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null)).toBe(true);
+    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null && seat.points === null)).toBe(true);
+    expect(s.round!.winners).toBeNull();
   });
 
   it('records a human\'s calls, forces the entry for their own seat to null, and rejects malformed calls', () => {
@@ -498,9 +499,10 @@ describe('bot-call phase', () => {
     expect(errorCode(apply(s0, { type: 'botcall', playerId: 'ghost', calls, at: 200 }).effects)).toBe('not-seated');
   });
 
-  it('reveals once every connected human has called, scoring one point per correct call on another seat', () => {
+  it('reveals once every connected human has called, scoring calls, votes, and the imposter, and naming the winners', () => {
     let s = decided();
     const humans = s.seats.filter((seat) => seat.kind === 'human');
+    const imp = humans.find((seat) => seat.isImposter)!;
     const perfect: BotCall[] = s.seats.map((seat) => seat.kind);
     const allBots: BotCall[] = s.seats.map(() => 'bot');
     s = apply(s, { type: 'botcall', playerId: humans[0].playerId!, calls: perfect, at: 200 }).state;
@@ -509,10 +511,37 @@ describe('bot-call phase', () => {
     s = apply(s, { type: 'botcall', playerId: humans[2].playerId!, calls: s.seats.map(() => null), at: 202 }).state;
     expect(s.phase).toBe('reveal');
     expect(s.phaseEndsAt).toBeNull();
-    expect(s.seats[humans[0].index].score).toBe(5);
-    expect(s.seats[humans[1].index].score).toBe(3);
-    expect(s.seats[humans[2].index].score).toBe(0);
-    expect(s.seats.filter((seat) => seat.kind === 'bot').every((seat) => seat.score === null)).toBe(true);
+    // In decided() nobody voted for the imposter and the imposter survived, so the imposter earns the survival points.
+    expect(s.seats[humans[0].index].points).toMatchObject({ calls: 5, vote: 0 });
+    expect(s.seats[humans[1].index].points).toMatchObject({ calls: 3, vote: 0 });
+    expect(s.seats[humans[2].index].points).toMatchObject({ calls: 0, vote: 0 });
+    expect(s.seats[imp.index].points!.imposter).toBe(POINTS.survive);
+    for (const seat of s.seats) {
+      expect(seat.points).not.toBeNull();
+      expect(seat.score).toBe(seat.points!.total);
+      expect(seat.total).toBe(seat.score);
+    }
+    const best = Math.max(...s.seats.map((seat) => seat.score!));
+    expect(s.round!.winners).toEqual(s.seats.filter((seat) => seat.score === best).map((seat) => seat.index));
+    expect(s.round!.winners!.length).toBeGreaterThan(0);
+  });
+
+  it('crew who voted for the imposter score the vote points and an ejected imposter who steals scores the steal points', () => {
+    let s = inVote();
+    const imp = imposterOf(s);
+    const [c1, c2] = crewOf(s);
+    s = apply(s, { type: 'vote', playerId: c1.playerId!, seat: imp.index, at: 100 }).state;
+    s = apply(s, { type: 'vote', playerId: c2.playerId!, seat: imp.index, at: 100 }).state;
+    s = apply(s, { type: 'vote', playerId: imp.playerId!, seat: c1.index, at: 100 }).state;
+    s = apply(s, { type: 'timeout', at: 100 }).state;
+    expect(s.phase).toBe('steal');
+    s = apply(s, { type: 'steal', playerId: imp.playerId!, word: s.round!.word, at: 110 }).state;
+    s = apply(s, { type: 'timeout', at: 300 }).state;
+    expect(s.phase).toBe('reveal');
+    expect(s.seats[c1.index].points).toMatchObject({ vote: POINTS.vote, imposter: 0 });
+    expect(s.seats[imp.index].points).toMatchObject({ vote: 0, imposter: POINTS.steal });
+    const bots = s.seats.filter((seat) => seat.kind === 'bot');
+    expect(bots.every((seat) => seat.points!.calls === 0)).toBe(true);
   });
 
   it('a disconnected human does not hold the phase open, and a timeout reveals with 0 for humans who never called', () => {
@@ -527,18 +556,25 @@ describe('bot-call phase', () => {
 
     const t = apply(decided(), { type: 'timeout', at: 300 }).state;
     expect(t.phase).toBe('reveal');
-    expect(t.seats.filter((seat) => seat.kind === 'human').every((seat) => seat.score === 0)).toBe(true);
+    expect(t.seats.filter((seat) => seat.kind === 'human').every((seat) => seat.points!.calls === 0)).toBe(true);
   });
 
-  it('play again drops humans still disconnected and resets calls and scores', () => {
+  it('play again drops humans still disconnected, resets round scores, and keeps each human\'s running total', () => {
     let s = apply(decided(), { type: 'timeout', at: 300 }).state;
     const humans = s.seats.filter((seat) => seat.kind === 'human');
+    const imp = humans.find((seat) => seat.isImposter)!;
+    expect(s.seats[imp.index].total).toBe(POINTS.survive);
     s = apply(s, { type: 'disconnect', playerId: humans[1].playerId! }).state;
     s = apply(s, { type: 'again', playerId: humans[0].playerId!, at: 400 }).state;
     expect(s.phase).toBe('lobby');
     expect(s.seats.map((seat) => seat.playerId).sort()).toEqual([humans[0].playerId, humans[2].playerId].sort());
     expect(s.seats.map((seat) => seat.index)).toEqual([0, 1]);
-    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null)).toBe(true);
+    expect(s.seats.every((seat) => seat.botCalls === null && seat.score === null && seat.points === null)).toBe(true);
+    const kept = s.seats.find((seat) => seat.playerId === imp.playerId);
+    if (kept) expect(kept.total).toBe(POINTS.survive);
+    expect(s.seats.reduce((sum, seat) => sum + seat.total, 0)).toBe(
+      [humans[0], humans[2]].reduce((sum, seat) => sum + seat.total, 0),
+    );
   });
 });
 

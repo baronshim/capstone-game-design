@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chooseImposter, DURATIONS, isStealCorrect, resolveVote, scoreBotCalls } from '../../src/game/rules';
+import { chooseImposter, DURATIONS, isStealCorrect, POINTS, resolveVote, roundPoints, scoreBotCalls } from '../../src/game/rules';
 import { seededRng } from '../../src/game/aliases';
 
 describe('DURATIONS', () => {
@@ -73,5 +73,36 @@ describe('scoreBotCalls', () => {
   it('treats null entries and a missing call as zero', () => {
     expect(scoreBotCalls([null, null, null, null], seats, 0)).toBe(0);
     expect(scoreBotCalls(null, seats, 0)).toBe(0);
+  });
+});
+
+describe('roundPoints', () => {
+  const seats = [
+    { index: 0, kind: 'human' as const, isImposter: false, vote: 2, botCalls: ['bot', 'bot', 'bot', 'human'] as ('bot' | 'human' | null)[] },
+    { index: 1, kind: 'bot' as const, isImposter: false, vote: 0, botCalls: null },
+    { index: 2, kind: 'bot' as const, isImposter: true, vote: 0, botCalls: null },
+    { index: 3, kind: 'human' as const, isImposter: false, vote: 2, botCalls: null },
+  ];
+
+  it('pays crew for voting for the imposter and humans for correct calls', () => {
+    const survived = { ejected: null, stealCorrect: false };
+    expect(roundPoints(seats[0], seats, survived)).toEqual({ vote: POINTS.vote, imposter: 0, calls: 3, total: POINTS.vote + 3 });
+    expect(roundPoints(seats[1], seats, survived)).toEqual({ vote: 0, imposter: 0, calls: 0, total: 0 });
+    expect(roundPoints(seats[3], seats, survived)).toEqual({ vote: POINTS.vote, imposter: 0, calls: 0, total: POINTS.vote });
+  });
+
+  it('pays the imposter for surviving the vote, less for a steal, and nothing for a failed steal', () => {
+    expect(roundPoints(seats[2], seats, { ejected: null, stealCorrect: false }).imposter).toBe(POINTS.survive);
+    expect(roundPoints(seats[2], seats, { ejected: 1, stealCorrect: false }).imposter).toBe(POINTS.survive);
+    expect(roundPoints(seats[2], seats, { ejected: 2, stealCorrect: true }).imposter).toBe(POINTS.steal);
+    expect(roundPoints(seats[2], seats, { ejected: 2, stealCorrect: false }).imposter).toBe(0);
+    expect(roundPoints(seats[2], seats, { ejected: 2, stealCorrect: false }).vote).toBe(0);
+  });
+
+  it('gives nothing for an abstention or a wrong vote', () => {
+    const wrong = { ...seats[3], vote: 1 };
+    const none = { ...seats[3], vote: null };
+    expect(roundPoints(wrong, seats, { ejected: null, stealCorrect: false }).vote).toBe(0);
+    expect(roundPoints(none, seats, { ejected: null, stealCorrect: false }).vote).toBe(0);
   });
 });

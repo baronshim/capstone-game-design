@@ -401,11 +401,35 @@
       color: var(--bad); border: 1px solid rgba(255,125,107,.5); border-radius: 4px; padding: 1px 6px;
     }
     .reveal-votes { font-size: 13px; color: var(--faint); grid-column: 1 / -1; }
-    .scores {
-      margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft);
-      font-size: 14px; color: var(--muted);
+    .winner {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      margin: -4px 0 14px; padding: 12px; border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, rgba(86,224,200,.16), rgba(86,224,200,.04));
+      border: 1px solid rgba(86,224,200,.35);
     }
-    .scores b { color: var(--accent); }
+    .winner-label { font-family: var(--mono); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); }
+    .winner-names { font-family: var(--display); font-size: 22px; font-weight: 700; text-align: center; text-wrap: balance; }
+    .winner-names b { font-family: inherit; }
+    .winner-pts { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+    .scoreboard { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .score-row {
+      --seat: var(--accent);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 7px 10px; background: var(--field);
+      border: 1px solid var(--line-soft); border-left: 3px solid var(--seat); border-radius: var(--radius-sm);
+    }
+    .score-row .alias { font-size: 15px; }
+    .score-row .pts { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+    .pt {
+      font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 6px;
+      color: var(--muted); background: var(--panel); border: 1px solid var(--line-soft); white-space: nowrap;
+    }
+    .pt.imp { color: var(--bad); border-color: rgba(255,125,107,.4); }
+    .pt.vote { color: var(--good); border-color: rgba(90,217,138,.4); }
+    .pt.calls { color: var(--warn); border-color: rgba(255,206,92,.4); }
+    .pt.none { color: var(--faint); }
+    .score-row .score { font-family: var(--display); font-size: 18px; color: var(--ink); min-width: 2ch; text-align: right; }
+    .running { width: 100%; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: -2px; }
 
     /* ---- chat log ---- */
     #log {
@@ -555,10 +579,10 @@
         <li><b>Chat.</b> 90 seconds to argue. Whose clues were vague? Who sounds like a machine?</li>
         <li><b>Vote.</b> 20 seconds. A majority ejects one seat. You can change your pick until time runs out.</li>
         <li><b>Steal.</b> If the ejected seat is the imposter, they get 15 seconds to guess the word and win anyway.</li>
-        <li><b>Bot call.</b> 20 seconds to mark every other seat Human or Bot. One point per correct call.</li>
-        <li><b>Reveal.</b> Names, bots, the imposter, the votes, the word, and your score.</li>
+        <li><b>Bot call.</b> 20 seconds to mark every other seat Human or Bot.</li>
+        <li><b>Reveal.</b> Names, bots, the imposter, the votes, the word, and the scores.</li>
       </ol>
-      <p class="tip">Crew wins if the imposter is ejected and misses the steal. The imposter wins by surviving the vote or guessing the word.</p>
+      <p class="tip"><b>Scoring.</b> Vote for the imposter: 2 points. Imposter survives the vote: 3 points. Imposter is ejected but steals the word: 2 points. Each correct Human or Bot call: 1 point. The highest total wins the round, bots included. Play again keeps your total.</p>
       <form method="dialog"><button class="btn-primary">Got it</button></form>
     </dialog>
 

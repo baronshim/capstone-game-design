@@ -1,7 +1,7 @@
 import type { BotCall, ChatLine, Outcome, Phase, SeatKind } from './protocol';
 import { makeAliases, seededRng, shuffle } from './aliases';
 import { pickWord, validateClue } from './words';
-import { chooseImposter, DURATIONS, isStealCorrect, resolveVote, scoreBotCalls } from './rules';
+import { chooseImposter, DURATIONS, isStealCorrect, resolveVote, roundPoints, type RoundPoints } from './rules';
 
 export const SEAT_COUNT = 6;
 export const MAX_CHAT_LENGTH = 280;
@@ -23,8 +23,12 @@ export interface Seat {
   vote: number | null;
   /** The human's Human/Bot call per seat index, locked in during the bot-call phase; null until then and for bots. */
   botCalls: BotCall[] | null;
-  /** Correct bot calls this round, computed at the reveal; null for bots and before the reveal. */
+  /** Round points, computed at the reveal; null before it. */
   score: number | null;
+  /** How the round points break down; null before the reveal. */
+  points: RoundPoints | null;
+  /** Running total across rounds in this room. Bots are recreated each round, so only humans carry one. */
+  total: number;
 }
 
 export interface Round {
@@ -37,6 +41,8 @@ export interface Round {
   ejected: number | null;
   stealGuess: string | null;
   result: Outcome | null;
+  /** Seats with the highest round score, set at the reveal; null before it. */
+  winners: number[] | null;
 }
 
 export interface RoomState {
@@ -196,6 +202,8 @@ function join(state: RoomState, event: Extract<Event, { type: 'join' }>): Result
     vote: null,
     botCalls: null,
     score: null,
+    points: null,
+    total: 0,
   };
   return ok({ ...state, seats: [...state.seats, seat] });
 }
@@ -245,6 +253,8 @@ function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Resu
       vote: null,
       botCalls: null,
       score: null,
+      points: null,
+      total: 0,
     });
   }
   const aliases = makeAliases(SEAT_COUNT, rng);
@@ -258,12 +268,13 @@ function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Resu
     vote: null,
     botCalls: null,
     score: null,
+    points: null,
   }));
   const { category, word } = pickWord(rng);
   const imposter = chooseImposter(seats, rng);
   seats[imposter] = { ...seats[imposter], isImposter: true };
 
-  const round: Round = { seed: event.seed, category, word, clueSeat: 0, cluePass: 1, ejected: null, stealGuess: null, result: null };
+  const round: Round = { seed: event.seed, category, word, clueSeat: 0, cluePass: 1, ejected: null, stealGuess: null, result: null, winners: null };
   // Lobby chat referenced old seat indices, and the round is a fresh transcript anyway.
   return ok({ ...state, phase: 'clue', phaseEndsAt: event.at + DURATIONS.clueTurn, seats, transcript: [], round });
 }
@@ -321,13 +332,17 @@ function finish(state: RoomState, result: Outcome, at: number): RoomState {
   return { ...state, phase: 'botcall', phaseEndsAt: at + DURATIONS.botcall, round: { ...state.round!, result } };
 }
 
-/** Scores every human's calls and opens the untimed reveal. */
+/** Scores every seat for the round, adds it to the running totals, names the winners, and opens the untimed reveal. */
 function reveal(state: RoomState): RoomState {
-  const seats = state.seats.map((s) => ({
-    ...s,
-    score: s.kind === 'human' ? scoreBotCalls(s.botCalls, state.seats, s.index) : null,
-  }));
-  return { ...state, phase: 'reveal', phaseEndsAt: null, seats };
+  const round = state.round!;
+  const outcome = { ejected: round.ejected, stealCorrect: round.stealGuess !== null && isStealCorrect(round.stealGuess, round.word) };
+  const seats = state.seats.map((s) => {
+    const points = roundPoints(s, state.seats, outcome);
+    return { ...s, score: points.total, points, total: s.total + points.total };
+  });
+  const best = Math.max(...seats.map((s) => s.score));
+  const winners = seats.filter((s) => s.score === best).map((s) => s.index);
+  return { ...state, phase: 'reveal', phaseEndsAt: null, seats, round: { ...round, winners } };
 }
 
 /** True once every connected human has locked in their calls; a disconnected human does not hold the phase open. */
@@ -408,7 +423,7 @@ function again(state: RoomState, event: Extract<Event, { type: 'again' }>): Resu
   if (state.phase !== 'reveal') return fail(state, event.playerId, 'wrong-phase', 'The round is still going');
   const seats = state.seats
     .filter((s) => s.kind === 'human' && s.connected)
-    .map((s, index) => ({ ...s, index, alias: null, isImposter: false, clues: [], vote: null, botCalls: null, score: null }));
+    .map((s, index) => ({ ...s, index, alias: null, isImposter: false, clues: [], vote: null, botCalls: null, score: null, points: null }));
   return ok({ ...state, phase: 'lobby', phaseEndsAt: null, seats, transcript: [], round: null });
 }
 

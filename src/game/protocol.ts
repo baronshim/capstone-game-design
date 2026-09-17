@@ -1,3 +1,5 @@
+import type { RoundPoints } from './rules';
+
 export type Phase = 'lobby' | 'clue' | 'chat' | 'vote' | 'steal' | 'botcall' | 'reveal';
 export type SeatKind = 'human' | 'bot';
 /** Who won the round. */
@@ -30,8 +32,12 @@ export interface SeatView {
   vote?: number | null;
   /** Present only for your own seat: the calls you locked in this round, or null. */
   botCalls?: BotCall[] | null;
-  /** Present only at the reveal: correct calls this round for a human, null for a bot. */
-  score?: number | null;
+  /** Present only at the reveal: the seat's round points. */
+  score?: number;
+  /** Present only at the reveal: how the round points break down. */
+  points?: RoundPoints;
+  /** Running total across rounds in this room; bots start every round at 0. */
+  total: number;
 }
 
 export interface RoundView {
@@ -46,6 +52,8 @@ export interface RoundView {
   stealGuess: string | null;
   /** Present only at the reveal. */
   result: Outcome | null;
+  /** Present only at the reveal: seats sharing the top round score. */
+  winners: number[] | null;
 }
 
 export interface Snapshot {

@@ -65,7 +65,7 @@ function inReveal(): RoomState {
 
 const HUMANS = ['p0', 'p1', 'p2'];
 /** Fields that must never reach a viewer about another seat before the reveal. */
-const OTHER_SEAT_SECRETS = ['playerId', 'kind', 'isImposter', 'displayName', 'vote', 'botCalls', 'score'];
+const OTHER_SEAT_SECRETS = ['playerId', 'kind', 'isImposter', 'displayName', 'vote', 'botCalls', 'score', 'points'];
 
 describe('redact before the reveal', () => {
   const phases = { clue: inClue, chat: inChat, vote: inVote, steal: inSteal, botcall: inBotcall };
@@ -182,12 +182,26 @@ describe('redact during the bot call and at the reveal', () => {
     }
   });
 
-  it('exposes the result and every seat\'s score at the reveal', () => {
+  it('exposes the result, every seat\'s score, points, and the winners at the reveal', () => {
     const s = inReveal();
     const snap = redact(s, 'p0');
     expect(snap.round!.result).toBe('crew');
+    expect(Array.isArray(snap.round!.winners)).toBe(true);
     for (const seat of snap.seats) {
-      expect(seat.score).toBe(seat.kind === 'human' ? 0 : null);
+      expect(typeof seat.score).toBe('number');
+      expect(seat.points).toEqual(s.seats[seat.index].points);
+      expect(seat.total).toBe(s.seats[seat.index].total);
+    }
+  });
+
+  it('keeps points and winners hidden before the reveal but shows running totals everywhere', () => {
+    const s = inVote();
+    const snap = redact(s, 'p0');
+    expect(snap.round!.winners).toBeNull();
+    for (const seat of snap.seats) {
+      expect(seat).not.toHaveProperty('points');
+      expect(seat).not.toHaveProperty('score');
+      expect(seat.total).toBe(0);
     }
   });
 });

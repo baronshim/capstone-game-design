@@ -168,12 +168,18 @@ describe('a round in the Room Durable Object with fake bots', () => {
     for (const seat of reveal.seats) {
       expect(seat.kind === 'human' || seat.kind === 'bot').toBe(true);
       expect(typeof seat.isImposter).toBe('boolean');
+      expect(typeof seat.score).toBe('number');
       if (seat.kind === 'bot') {
         expect(seat.vote).toBe(impSeat);
-        expect(seat.score).toBeNull();
+        expect(seat.points).toMatchObject({ vote: 2, calls: 0 });
       } else {
-        expect(seat.score).toBe(5);
+        expect(seat.points!.calls).toBe(5);
       }
+    }
+    // Every crew seat voted for the imposter and the imposter missed the steal: the humans with perfect calls win.
+    const crewHumans = reveal.seats.filter((s) => s.kind === 'human' && !s.isImposter).map((s) => s.index);
+    expect(reveal.round!.winners).toEqual(crewHumans);
+    {
     }
     expect(reveal.seats.filter((s) => s.kind === 'human').map((s) => s.displayName).sort()).toEqual([...NAMES].sort());
     expect(JSON.stringify(reveal)).not.toContain('"playerId"');
@@ -196,7 +202,8 @@ describe('a round in the Room Durable Object with fake bots', () => {
     await room.fireAlarm();
     const reveal = await room.clients[0].state((s) => s.phase === 'reveal');
     expect(reveal.round).toMatchObject({ result: 'imposter', ejected: null });
-    expect(reveal.seats.filter((s) => s.kind === 'human').every((s) => s.score === 0)).toBe(true);
+    expect(reveal.seats.filter((s) => s.kind === 'human').every((s) => s.points!.calls === 0)).toBe(true);
+    expect(reveal.round!.winners!.length).toBeGreaterThan(0);
   });
 
   it('one human with a bot imposter: bots clue, chat, and vote, an ejected bot imposter steals, the human scores', async () => {
@@ -226,7 +233,7 @@ describe('a round in the Room Durable Object with fake bots', () => {
     const imposters = reveal.seats.filter((s) => s.isImposter);
     expect(imposters).toHaveLength(1);
     expect(imposters[0].kind).toBe('bot');
-    expect(reveal.seats[chat.you!].score).toBe(5);
+    expect(reveal.seats[chat.you!].points!.calls).toBe(5);
     expect(reveal.seats.filter((s) => s.kind === 'bot').every((s) => s.vote !== null)).toBe(true);
     if (reveal.seats[target.index].isImposter) expect(typeof reveal.round!.stealGuess).toBe('string');
     else expect(reveal.round!.result).toBe('imposter');

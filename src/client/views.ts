@@ -137,7 +137,7 @@ export function revealHtml(snap: Snapshot): string {
   const r = snap.round;
   if (!r) return '';
   const win = r.result === 'crew' ? 'crew' : 'imposter';
-  const headline = r.result === 'crew' ? 'Crew wins' : 'Imposter wins';
+  const headline = r.result === 'crew' ? 'Crew wins the round' : 'Imposter wins the round';
   const ejected = r.ejected === null ? 'Nobody was ejected.' : `${esc(nameOf(snap, r.ejected))} was ejected.`;
   const steal = r.stealGuess !== null ? ` Steal guess: “${esc(r.stealGuess)}”.` : '';
   const rows = snap.seats
@@ -149,12 +149,44 @@ export function revealHtml(snap: Snapshot): string {
       return `<div class="reveal-seat" style="--seat:${color}"><span class="alias">${esc(s.alias ?? '')}</span><span style="display:flex;gap:8px;align-items:center;justify-content:flex-end">${imp}${who}</span>${votedFor}</div>`;
     })
     .join('');
-  const scores = snap.seats
-    .filter((s) => s.kind === 'human' && s.score !== null && s.score !== undefined)
-    .map((s) => `${esc(s.displayName ?? nameOf(snap, s.index))} <b>${s.score}/${snap.seats.length - 1}</b>`)
-    .join(' · ');
-  const scoreLine = scores ? `<div class="scores">Bot calls — ${scores}</div>` : '';
-  return `<div class="reveal-panel"><h3 class="reveal-headline ${win}">${headline}</h3><p class="reveal-sub">${ejected}${steal} The word was <b>${esc(r.word ?? '')}</b>.</p><div class="reveal-list">${rows}</div>${scoreLine}</div>`;
+  return `<div class="reveal-panel">${winnerHtml(snap)}<h3 class="reveal-headline ${win}">${headline}</h3><p class="reveal-sub">${ejected}${steal} The word was <b>${esc(r.word ?? '')}</b>.</p>${scoreboardHtml(snap)}<div class="reveal-list">${rows}</div></div>`;
+}
+
+/** The round's winner or winners, by call sign, with the player's name for a human. */
+function winnerHtml(snap: Snapshot): string {
+  const winners = snap.round?.winners ?? [];
+  if (winners.length === 0) return '';
+  const top = snap.seats[winners[0]]?.score ?? 0;
+  const names = winners
+    .map((i) => {
+      const s = snap.seats[i];
+      const human = s.kind === 'human' && s.displayName ? ` (${esc(s.displayName)})` : s.kind === 'bot' ? ' (bot)' : '';
+      return `<b style="color:${seatColor(snap, i)}">${esc(nameOf(snap, i))}</b>${human}`;
+    })
+    .join(', ');
+  const label = winners.length > 1 ? 'Tied for the win' : 'Winner';
+  return `<div class="winner"><span class="winner-label">${label}</span><span class="winner-names">${names}</span><span class="winner-pts">${top} pt${top === 1 ? '' : 's'}</span></div>`;
+}
+
+/** Every seat's round points, highest first, with how they were earned; running totals once a room has played more than one round. */
+function scoreboardHtml(snap: Snapshot): string {
+  const seats = snap.seats.filter((s) => s.score !== undefined && s.points !== undefined);
+  if (seats.length === 0) return '';
+  const showTotals = seats.some((s) => s.total !== s.score);
+  const rows = [...seats]
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.index - b.index)
+    .map((s) => {
+      const p = s.points!;
+      const parts = [
+        p.imposter ? `<span class="pt imp">${p.imposter} ${s.isImposter && snap.round?.ejected !== s.index ? 'survived' : 'stole'}</span>` : '',
+        p.vote ? `<span class="pt vote">${p.vote} caught it</span>` : '',
+        p.calls ? `<span class="pt calls">${p.calls} bot call${p.calls === 1 ? '' : 's'}</span>` : '',
+      ].join('');
+      const total = showTotals && s.kind === 'human' ? `<span class="running">total ${s.total}</span>` : '';
+      return `<div class="score-row" style="--seat:${seatColor(snap, s.index)}"><i class="dot"></i><span class="alias">${esc(nameOf(snap, s.index))}</span><span class="pts">${parts || '<span class="pt none">0</span>'}</span><b class="score">${s.score}</b>${total}</div>`;
+    })
+    .join('');
+  return `<div class="scoreboard">${rows}</div>`;
 }
 
 export function logHtml(snap: Snapshot): string {

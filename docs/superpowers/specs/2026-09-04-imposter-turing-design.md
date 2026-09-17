@@ -91,8 +91,12 @@ All phases show a visible countdown.
 
 - **Group result.** Crew wins if the imposter is ejected and fails the
   steal. Imposter wins otherwise (not ejected, or ejected and steals).
-- **Bot-call score.** One point per correct Human/Bot call. Shown per human
-  at the reveal. Scores are per round only; no persistence.
+- **Round points (revised 2026-09-16).** Every seat, bots included: a crew
+  seat that voted for the imposter scores 2; the imposter scores 3 for
+  surviving the vote or 2 for being ejected and stealing; each human scores
+  1 per correct Human/Bot call. The seat(s) with the highest round total win
+  the round. Humans keep a running total across rounds in the same room;
+  nothing persists beyond the room.
 
 ### 2.5 Truth table for menu questions
 

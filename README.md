@@ -26,8 +26,17 @@ Plans: `docs/superpowers/plans/`
 5. **Steal.** An ejected imposter, human or bot, gets 15s to guess the word.
 6. **Bot call.** 20s. Every human marks every other seat Human or Bot.
 7. **Reveal.** Everyone's name, who was human and who was a bot, who was the
-   imposter, who voted for whom, the word, the result, and each human's
-   bot-call score. Play again returns to the lobby.
+   imposter, who voted for whom, the word, the result, and the scoreboard.
+   Play again returns to the lobby.
+
+## Scoring
+
+Every seat scores each round, bots included, so there is always a winner:
+a crew seat that voted for the imposter gets 2 points; the imposter gets 3
+for surviving the vote, or 2 for being ejected and then stealing the word;
+each human gets 1 point per correct Human/Bot call. The highest round total
+wins (ties share it). Humans keep a running total across rounds in the
+same room.
 
 ## Bots
 

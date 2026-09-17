@@ -31,6 +31,39 @@ export function isStealCorrect(guess: string, word: string): boolean {
   return g.length > 0 && g === word.trim().toLowerCase();
 }
 
+/** Round points (spec 2.4): a crew vote for the imposter, the imposter surviving the vote or stealing, and each correct bot call. */
+export const POINTS = { vote: 2, survive: 3, steal: 2, call: 1 } as const;
+
+export interface RoundPoints {
+  vote: number;
+  imposter: number;
+  calls: number;
+  total: number;
+}
+
+interface ScoredSeat {
+  index: number;
+  kind: SeatKind;
+  isImposter: boolean;
+  vote: number | null;
+  botCalls: BotCall[] | null;
+}
+
+/** A seat's points for the round once the vote and any steal have resolved. */
+export function roundPoints(seat: ScoredSeat, seats: ScoredSeat[], outcome: { ejected: number | null; stealCorrect: boolean }): RoundPoints {
+  const imposter = seats.find((s) => s.isImposter);
+  let vote = 0;
+  let imp = 0;
+  if (seat.isImposter) {
+    if (outcome.ejected !== seat.index) imp = POINTS.survive;
+    else if (outcome.stealCorrect) imp = POINTS.steal;
+  } else if (imposter && seat.vote === imposter.index) {
+    vote = POINTS.vote;
+  }
+  const calls = seat.kind === 'human' ? scoreBotCalls(seat.botCalls, seats, seat.index) * POINTS.call : 0;
+  return { vote, imposter: imp, calls, total: vote + imp + calls };
+}
+
 /** One point per other seat called correctly (spec 2.4); a null entry or a missing call scores nothing. */
 export function scoreBotCalls(calls: BotCall[] | null, seats: { index: number; kind: SeatKind }[], self: number): number {
   if (!calls) return 0;
