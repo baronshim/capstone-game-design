@@ -19,8 +19,10 @@ async function startedRoomOnce(names: string[]) {
     clients.push(c);
   }
   clients[0].send({ type: 'start' });
-  for (const c of clients) snaps.push(await c.state((s) => s.phase === 'clue'));
+  for (const c of clients) await c.state((s) => s.phase === 'deal');
   const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+  expect(await runDurableObjectAlarm(stub)).toBe(true);
+  for (const c of clients) snaps.push(await c.state((s) => s.phase === 'clue'));
   const fireAlarm = async () => {
     expect(await runDurableObjectAlarm(stub)).toBe(true);
   };
@@ -75,6 +77,21 @@ function perfectCalls(snap: Snapshot, humanSeats: number[]): BotCall[] {
 }
 
 describe('a round in the Room Durable Object with fake bots', () => {
+  it('start opens a timed deal with no clue turn, and the deal alarm opens the first clue turn', async () => {
+    const code = await createRoom();
+    const a = await connect(code);
+    a.send({ type: 'join', playerId: 'p0', displayName: 'Ada' });
+    await a.state((s) => s.you === 0);
+    a.send({ type: 'start' });
+    const deal = await a.state((s) => s.phase === 'deal');
+    expect(typeof deal.phaseEndsAt).toBe('number');
+    expect(deal.round!.clueSeat).toBeNull();
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    const clue = await a.state((s) => s.phase === 'clue');
+    expect(clue.round!.clueSeat).toBe(0);
+  });
+
   it('starts in the clue phase with six connected seats and exactly one imposter who cannot see the word', async () => {
     const room = await startedRoom({ imposter: 'human' });
     const first = room.snaps[0];

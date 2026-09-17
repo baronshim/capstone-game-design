@@ -340,7 +340,13 @@ function start(state: RoomState, event: Extract<Event, { type: 'start' }>): Resu
 
   const round: Round = { seed: event.seed, category, word, clueSeat: 0, cluePass: 1, ejected: null, stealGuess: null, result: null, winners: null };
   // Lobby chat referenced old seat indices, and the round is a fresh transcript anyway.
-  return ok({ ...state, phase: 'clue', phaseEndsAt: event.at + DURATIONS.clueTurn, seats, transcript: [], round });
+  // The deal: everyone reads their card for a few seconds before the first clue turn opens.
+  return ok({ ...state, phase: 'deal', phaseEndsAt: event.at + DURATIONS.deal, seats, transcript: [], round });
+}
+
+/** Opens the first clue turn once the deal has been read. */
+function enterClue(state: RoomState, at: number): RoomState {
+  return { ...state, phase: 'clue', phaseEndsAt: at + DURATIONS.clueTurn };
 }
 
 /** Records a clue ('' for a passed turn) for the seat whose turn it is, then moves to the next turn or opens the chat. */
@@ -493,6 +499,8 @@ function again(state: RoomState, event: Extract<Event, { type: 'again' }>): Resu
 
 function timeout(state: RoomState, event: Extract<Event, { type: 'timeout' }>): Result {
   switch (state.phase) {
+    case 'deal':
+      return ok(enterClue(state, event.at));
     case 'clue':
       return ok(recordClue(state, '', event.at));
     case 'chat':

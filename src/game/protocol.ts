@@ -1,6 +1,6 @@
 import type { RoundPoints } from './rules';
 
-export type Phase = 'lobby' | 'clue' | 'chat' | 'vote' | 'steal' | 'botcall' | 'reveal';
+export type Phase = 'lobby' | 'deal' | 'clue' | 'chat' | 'vote' | 'steal' | 'botcall' | 'reveal';
 export type SeatKind = 'human' | 'bot';
 /** Who won the round. */
 export type Outcome = 'crew' | 'imposter';

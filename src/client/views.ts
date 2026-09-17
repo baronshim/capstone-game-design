@@ -35,6 +35,7 @@ function seatColor(snap: Snapshot, seat: number): string {
 /** Short phase names for the header. */
 export const PHASE_LABELS: Record<Phase, string> = {
   lobby: 'lobby',
+  deal: 'deal',
   clue: 'clues',
   chat: 'chat',
   vote: 'vote',

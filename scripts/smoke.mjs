@@ -68,8 +68,9 @@ assert.equal(seen.seats[1].kind, 'human', 'own seat kind visible');
 assert.equal(seen.autopilot, false, 'snapshot carries the autopilot flag');
 
 a.send({ type: 'start' });
-let snapA = await a.state((s) => s.phase === 'clue');
-const snapB = await b.state((s) => s.phase === 'clue');
+await a.state((s) => s.phase === 'deal');
+let snapA = await a.state((s) => s.phase === 'clue', 8000);
+const snapB = await b.state((s) => s.phase === 'clue', 8000);
 assert.equal(snapA.seats.length, 6, 'six seats after start');
 assert.ok(snapA.seats.every((s) => typeof s.alias === 'string'), 'every seat has an alias');
 assert.ok(snapA.seats.every((s) => s.connected), 'bots count as connected');

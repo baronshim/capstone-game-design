@@ -17,14 +17,15 @@ import {
 import { FALLBACK_CLUES, ruleVote, ScriptedBackend } from '../../src/worker/backends/scripted';
 import { FAKE_CLUES, FAKE_LINE, FakeBackend } from '../../src/worker/backends/fake';
 import { PERSONAS, styleSheet, type BotInputs } from '../../src/worker/prompts';
+import { DURATIONS } from '../../src/game/rules';
 
-/** One human and five bots, started with the first seed whose state satisfies `pred`. */
+/** One human and five bots, started with the first seed whose state satisfies `pred`, past the deal and into the first clue turn. */
 function started(pred: (s: RoomState) => boolean = () => true): RoomState {
   for (let seed = 1; seed < 1000; seed++) {
     let s = createRoom('ABCD', 0);
     s = apply(s, { type: 'join', playerId: 'p0', displayName: 'Ada', at: 0 }).state;
     s = apply(s, { type: 'start', playerId: 'p0', at: 1000, seed }).state;
-    if (pred(s)) return s;
+    if (pred(s)) return apply(s, { type: 'timeout', at: 1000 + DURATIONS.deal }).state;
   }
   throw new Error('no seed satisfies the predicate');
 }

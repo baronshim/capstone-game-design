@@ -4,7 +4,7 @@ import { seededRng } from '../../src/game/aliases';
 
 describe('DURATIONS', () => {
   it('matches the spec', () => {
-    expect(DURATIONS).toEqual({ clueTurn: 20_000, chat: 90_000, vote: 20_000, steal: 15_000, botcall: 20_000 });
+    expect(DURATIONS).toEqual({ deal: 6_000, clueTurn: 30_000, chat: 150_000, vote: 30_000, steal: 20_000, botcall: 30_000 });
   });
 });
 
