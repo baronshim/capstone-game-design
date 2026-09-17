@@ -43,6 +43,52 @@ export function mentionsWord(text: string, word: string): boolean {
 
 export type Validated = { ok: true; event: Event | null } | { ok: false; reason: string };
 
+/** Chat lines a bot may post per round; humans rarely say more in 90 seconds, and bots that do get spotted. */
+export const MAX_BOT_LINES_PER_ROUND = 3;
+
+/** Model-speak that reads as a bot in this game's chat (seen live 2026-09-16). Matched as whole words, case-insensitive. */
+const FILLER = /\b(definitely|sus|vibes|for real|honestly|tbh|lol|haha|let'?s go+|hyped?|ready to (win|play|go))\b/i;
+
+const EMOJI = /\p{Extended_Pictographic}/u;
+
+/** Words that carry no point of their own, ignored when comparing lines. */
+const STOP = new Set(
+  (
+    'a an the i im is it its so to of and or but at all on in for with that this be was were do does did dont doesnt didnt ' +
+    'not no yeah yes ok okay u ur you your we they he she me my just like really kinda sorta maybe think also too very ' +
+    'what who why how hmm hm oh well wait'
+  ).split(' '),
+);
+
+/** The content words of a line, lowercased, punctuation stripped, stop words dropped. */
+function wordSet(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter((w) => w.length > 1 && !STOP.has(w)),
+  );
+}
+
+/** True when `text` makes the point `prior` made: at least three quarters of the shorter line's content words are in the other. */
+export function nearDuplicate(text: string, prior: string): boolean {
+  const a = wordSet(text);
+  const b = wordSet(prior);
+  if (a.size < 2 || b.size < 2) return false;
+  let shared = 0;
+  for (const w of a) if (b.has(w)) shared++;
+  return shared / Math.min(a.size, b.size) >= 0.75;
+}
+
+/** Why a chat line would read as a bot, or null when it passes (spec 5.7 plus the live tells). */
+export function chatLineProblem(text: string, inputs: Extract<BotInputs, { action: 'chat' }>): string | null {
+  if (FILLER.test(text)) return 'say-filler';
+  if (EMOJI.test(text) && inputs.style.emojiRate === 0) return 'say-emoji';
+  if (inputs.transcript.some((l) => nearDuplicate(text, l.text))) return 'say-duplicate';
+  return null;
+}
+
 /** Checks a raw reply against the game (spec 5.7). `ok` with a null event is a valid silence. */
 export function validateOutput(state: RoomState, inputs: BotInputs, raw: unknown, at: number): Validated {
   if (raw === null || typeof raw !== 'object') return { ok: false, reason: 'not-an-object' };
@@ -60,8 +106,11 @@ export function validateOutput(state: RoomState, inputs: BotInputs, raw: unknown
       if (typeof out.say !== 'string') return { ok: false, reason: 'say-missing' };
       const text = out.say.trim();
       if (!text) return { ok: true, event: null };
+      if (inputs.transcript.filter((l) => l.seat === inputs.seat).length >= MAX_BOT_LINES_PER_ROUND) return { ok: true, event: null };
       if (text.length > MAX_BOT_LINE) return { ok: false, reason: 'say-too-long' };
       if (mentionsWord(text, word)) return { ok: false, reason: 'say-leaks-word' };
+      const problem = chatLineProblem(text, inputs);
+      if (problem) return { ok: false, reason: problem };
       return { ok: true, event: { type: 'botChat', seat: inputs.seat, text, at } };
     }
     case 'vote': {

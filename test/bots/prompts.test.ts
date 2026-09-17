@@ -35,6 +35,20 @@ describe('personaFor', () => {
     const names = new Set([0, 1, 2, 3, 4, 5].map((seat) => personaFor(7, seat).name));
     expect(names.size).toBeGreaterThan(1);
   });
+
+  it('gives every seat in a round a different persona, for any seed', () => {
+    for (const seed of [1, 2, 3, 99, 12345, 0x7fffffff]) {
+      const names = [0, 1, 2, 3, 4, 5].map((seat) => personaFor(seed, seat).name);
+      expect(new Set(names).size).toBe(6);
+    }
+  });
+
+  it('has no persona that types emoji or leans on lol', () => {
+    for (const p of PERSONAS) {
+      expect(p.voice.toLowerCase()).not.toContain('emoji');
+      expect(p.voice.toLowerCase()).not.toContain('lol');
+    }
+  });
 });
 
 describe('styleSheet', () => {
@@ -102,6 +116,29 @@ describe('buildMessages', () => {
     const loud = buildMessages({ action: 'chat', ...ctx({ style: styleSheet(['lol', 'ok.', 'sure']) }) });
     expect(loud.user).toContain('100% are all lowercase');
     expect(loud.user).toContain('33% end with punctuation');
+  });
+
+  it('tells the bot to skip emoji unless the humans use them, and to shorten call signs', () => {
+    const none = buildMessages({ action: 'chat', ...ctx({ style: styleSheet(['who said round', 'idk']) }) });
+    expect(none.system + none.user).toMatch(/no emoji/i);
+    const some = buildMessages({ action: 'chat', ...ctx({ style: styleSheet(['nice 😀', 'lol 😂']) }) });
+    expect(some.system + some.user).not.toMatch(/no emoji/i);
+    expect(none.system).toMatch(/one word of (their|the) call sign/i);
+  });
+
+  it('shows the bot its own earlier lines and asks it not to repeat anyone', () => {
+    const m = buildMessages({
+      action: 'chat',
+      ...ctx({
+        transcript: [
+          { seat: 0, text: 'who said round', at: 1 },
+          { seat: 2, text: 'round is fine imo', at: 2 },
+        ],
+      }),
+    });
+    expect(m.user).toMatch(/you have already said/i);
+    expect(m.user).toContain('round is fine imo');
+    expect(m.user).toMatch(/nothing new/i);
   });
 
   it('asks the ejected imposter for a guess with the clues and category', () => {

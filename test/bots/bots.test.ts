@@ -110,6 +110,35 @@ describe('validateOutput', () => {
     expect(validateOutput(s, inputs, { say: 5 }, 9)).toMatchObject({ ok: false });
   });
 
+  it('drops chat lines that copy an earlier line, lean on filler, or use emoji when the humans do not', () => {
+    let s = inChat();
+    const bots = s.seats.filter((x) => x.kind === 'bot');
+    const [a, b] = bots;
+    s = apply(s, { type: 'chat', playerId: 'p0', text: 'fox is kinda sus with fruit', at: 5 }).state;
+    s = apply(s, { type: 'botChat', seat: a.index, text: 'fruit does not fit at all', at: 6 }).state;
+    const inputs = buildInputs(s, turn(b.index, 'chat'));
+    expect(validateOutput(s, inputs, { say: 'fruit does not fit at all.' }, 9)).toMatchObject({ ok: false, reason: 'say-duplicate' });
+    expect(validateOutput(s, inputs, { say: 'yeah fruit doesnt fit at all' }, 9)).toMatchObject({ ok: false, reason: 'say-duplicate' });
+    expect(validateOutput(s, inputs, { say: 'fox is definitely the imposter' }, 9)).toMatchObject({ ok: false, reason: 'say-filler' });
+    expect(validateOutput(s, inputs, { say: "Let's gooo!" }, 9)).toMatchObject({ ok: false, reason: 'say-filler' });
+    expect(validateOutput(s, inputs, { say: 'hmm fox? 🤔' }, 9)).toMatchObject({ ok: false, reason: 'say-emoji' });
+    expect(validateOutput(s, inputs, { say: 'wait why fruit' }, 9)).toEqual({
+      ok: true,
+      event: { type: 'botChat', seat: b.index, text: 'wait why fruit', at: 9 },
+    });
+  });
+
+  it('lets a bot use emoji once a human has, and silences a bot after its third line', () => {
+    let s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    s = apply(s, { type: 'chat', playerId: 'p0', text: 'ok 😀', at: 5 }).state;
+    let inputs = buildInputs(s, turn(bot.index, 'chat'));
+    expect(validateOutput(s, inputs, { say: 'hm 🤔' }, 9)).toMatchObject({ ok: true });
+    for (let i = 0; i < 3; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 6 + i }).state;
+    inputs = buildInputs(s, turn(bot.index, 'chat'));
+    expect(validateOutput(s, inputs, { say: 'one more thing' }, 9)).toEqual({ ok: true, event: null });
+  });
+
   it('accepts a vote for another live seat only', () => {
     const s = inVote();
     const bot = s.seats.find((x) => x.kind === 'bot')!;

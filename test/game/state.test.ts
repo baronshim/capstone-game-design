@@ -614,7 +614,7 @@ describe('bots in the reducer', () => {
     expect(r.effects).toMatchObject([{ type: 'botTurn', seat: 1, action: 'clue' }]);
   });
 
-  it('entering the chat emits 2 to 4 chat ticks per bot, each 4 to 80s in, and nothing for humans', () => {
+  it('entering the chat emits 1 to 3 chat ticks per bot, each 6 to 80s in, and nothing for humans', () => {
     let r: Result = { state: started(['Ada', 'Bob']), effects: [] };
     while (r.state.phase === 'clue') r = apply(r.state, { type: 'timeout', at: 2000 });
     expect(r.state.phase).toBe('chat');
@@ -626,10 +626,10 @@ describe('bots in the reducer', () => {
       if (seat.kind === 'human') {
         expect(mine).toHaveLength(0);
       } else {
-        expect(mine.length).toBeGreaterThanOrEqual(2);
-        expect(mine.length).toBeLessThanOrEqual(4);
+        expect(mine.length).toBeGreaterThanOrEqual(1);
+        expect(mine.length).toBeLessThanOrEqual(3);
         for (const t of mine) {
-          expect(t.delayMs).toBeGreaterThanOrEqual(4000);
+          expect(t.delayMs).toBeGreaterThanOrEqual(6000);
           expect(t.delayMs).toBeLessThan(80_000);
         }
       }

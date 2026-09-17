@@ -142,9 +142,9 @@ export function botEffects(prev: RoomState, next: RoomState): BotTurn[] {
     const rng = seededRng(round.seed ^ 0x5bd1e995);
     for (const seat of next.seats) {
       if (seat.kind !== 'bot') continue;
-      const ticks = 2 + Math.floor(rng() * 3);
+      const ticks = 1 + Math.floor(rng() * 3);
       for (let i = 0; i < ticks; i++) {
-        out.push({ type: 'botTurn', seat: seat.index, action: 'chat', delayMs: 4000 + Math.floor(rng() * 76_000) });
+        out.push({ type: 'botTurn', seat: seat.index, action: 'chat', delayMs: 6000 + Math.floor(rng() * 74_000) });
       }
     }
   } else if (next.phase === 'vote' && prev.phase !== 'vote') {
