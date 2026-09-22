@@ -130,7 +130,7 @@ export interface Messages {
 
 const RULES =
   'Imposter Turing is a chat game with six seats. Everyone but the imposter knows a secret word from a shared category. ' +
-  'Each seat gives two one-word clues in turn, then everyone chats for 90 seconds, votes for who they think the imposter is, ' +
+  'Each seat gives two one-word clues in turn, then everyone chats for 150 seconds, votes for who they think the imposter is, ' +
   'and the ejected seat, if it is the imposter, may guess the word. Some seats are bots pretending to be human; ' +
   'a human who spots a bot scores a point.';
 
