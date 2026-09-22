@@ -252,6 +252,8 @@
       max-width: calc(100% - 32px);
     }
     .banner.show { opacity: 1; transform: translate(-50%, 0); }
+    /* The deal exists so the card can be read, so its banner sits below the card instead of over it. */
+    .banner.deal { top: auto; bottom: 14%; }
     .banner b { font-family: var(--display); font-size: 22px; letter-spacing: .02em; color: var(--ink); }
     .banner span { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
     .banner.mine { background: var(--accent); border-color: transparent; }

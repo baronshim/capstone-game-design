@@ -44,12 +44,16 @@ let lastTickSecond = -1;
 /** Timer that takes the transition banner back down. */
 let bannerTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Shows the transition banner for a couple of seconds. `mine` paints it as the viewer's own cue. */
-function banner(title: string, sub: string, mine = false): void {
+/**
+ * Shows the transition banner for a couple of seconds. `mine` paints it as the viewer's own cue;
+ * `belowCard` drops it under the word card, for the deal, whose whole point is reading that card.
+ */
+function banner(title: string, sub: string, mine = false, belowCard = false): void {
   const el = $('banner');
   $('banner-title').textContent = title;
   $('banner-sub').textContent = sub;
   el.classList.toggle('mine', mine);
+  el.classList.toggle('deal', belowCard);
   el.classList.add('show');
   if (bannerTimer !== null) clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => el.classList.remove('show'), 2600);
@@ -194,7 +198,7 @@ function render(): void {
     typing.clear();
     // Not on the first snapshot after joining: that one is the room as found, not a transition.
     if (lastPhase !== null) {
-      banner(BANNERS[ph].title, BANNERS[ph].sub);
+      banner(BANNERS[ph].title, BANNERS[ph].sub, false, ph === 'deal');
       chime();
     }
     lastTurnMine = false;
