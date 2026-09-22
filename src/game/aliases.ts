@@ -3,6 +3,9 @@ export type Rng = () => number;
 const COLORS = ['Teal', 'Amber', 'Crimson', 'Indigo', 'Olive', 'Coral', 'Slate', 'Violet', 'Mint', 'Rust'];
 const ANIMALS = ['Otter', 'Heron', 'Fox', 'Lynx', 'Moth', 'Newt', 'Raven', 'Yak', 'Ibis', 'Gecko'];
 
+/** Every word a call sign can contain, lowercased. Secret words must stay clear of these, or naming a seat would leak the word. */
+export const ALIAS_WORDS: ReadonlySet<string> = new Set([...COLORS, ...ANIMALS].map((w) => w.toLowerCase()));
+
 /** Fisher-Yates shuffle in place; returns the same array for convenience. */
 export function shuffle<T>(items: T[], rng: Rng): T[] {
   for (let i = items.length - 1; i > 0; i--) {

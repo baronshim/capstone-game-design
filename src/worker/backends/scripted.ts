@@ -4,12 +4,13 @@ import { CATEGORIES, validateClue } from '../../game/words';
 
 /** Generic clues per category for when no model is available (spec 4.5). None of these is a secret word. */
 export const FALLBACK_CLUES: Record<string, string[]> = {
-  Animals: ['fur', 'wild', 'zoo', 'tail', 'paws', 'creature', 'legs', 'nature'],
-  Food: ['tasty', 'dinner', 'snack', 'yummy', 'plate', 'kitchen', 'hungry', 'bite'],
-  Places: ['visit', 'trip', 'crowd', 'building', 'walk', 'ticket', 'map', 'far'],
-  Objects: ['handy', 'tool', 'shelf', 'grab', 'useful', 'thing', 'daily', 'hold'],
-  Jobs: ['work', 'uniform', 'career', 'shift', 'skill', 'training', 'boss', 'salary'],
-  Sports: ['team', 'score', 'sweat', 'match', 'fans', 'practice', 'coach', 'win'],
+  Space: ['sky', 'dark', 'float', 'vast', 'science', 'beyond', 'gravity', 'distant'],
+  'Golden record': ['sound', 'earth', 'noise', 'loud', 'nature', 'human', 'echo', 'alive'],
+  'Rocket launch': ['blast', 'smoke', 'thrust', 'soar', 'build', 'festival', 'glue', 'hobby'],
+  'Road trip': ['travel', 'miles', 'road', 'wheels', 'rest', 'journey', 'stop', 'pack'],
+  'Places in the book': ['city', 'state', 'far', 'warm', 'crowd', 'visit', 'west', 'home'],
+  'Recording kit': ['audio', 'voice', 'press', 'listen', 'gadget', 'pocket', 'tech', 'button'],
+  Family: ['together', 'related', 'love', 'older', 'younger', 'house', 'name', 'blood'],
 };
 
 /**

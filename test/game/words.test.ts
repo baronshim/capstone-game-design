@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CATEGORIES, isSecretWord, normalizeWord, pickWord, validateClue } from '../../src/game/words';
-import { seededRng } from '../../src/game/aliases';
+import { ALIAS_WORDS, seededRng } from '../../src/game/aliases';
 
 describe('CATEGORIES', () => {
   it('has at least 5 categories of at least 8 single lowercase words with no duplicates', () => {
@@ -11,6 +11,10 @@ describe('CATEGORIES', () => {
       expect(c.words.length).toBeGreaterThanOrEqual(8);
       for (const w of c.words) expect(w).toMatch(/^[a-z]+$/);
     }
+  });
+
+  it('never uses a call-sign word as a secret word, so naming a seat cannot leak it', () => {
+    for (const c of CATEGORIES) for (const w of c.words) expect(ALIAS_WORDS.has(w)).toBe(false);
   });
 });
 

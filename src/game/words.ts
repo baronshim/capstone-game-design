@@ -5,13 +5,15 @@ export interface Category {
   words: string[];
 }
 
+/** Every category comes from See You in the Cosmos: Alex's rocket, his golden iPod, the trip, and the family he edits out of the record. */
 export const CATEGORIES: Category[] = [
-  { name: 'Animals', words: ['elephant', 'penguin', 'dolphin', 'giraffe', 'octopus', 'kangaroo', 'tiger', 'parrot', 'camel', 'spider'] },
-  { name: 'Food', words: ['pizza', 'sushi', 'pancake', 'burrito', 'chocolate', 'noodles', 'cheese', 'mango', 'popcorn', 'soup'] },
-  { name: 'Places', words: ['beach', 'library', 'airport', 'hospital', 'castle', 'desert', 'stadium', 'jungle', 'museum', 'farm'] },
-  { name: 'Objects', words: ['umbrella', 'guitar', 'telescope', 'backpack', 'candle', 'mirror', 'ladder', 'pillow', 'compass', 'kettle'] },
-  { name: 'Jobs', words: ['pilot', 'chef', 'dentist', 'firefighter', 'astronaut', 'farmer', 'detective', 'teacher', 'plumber', 'magician'] },
-  { name: 'Sports', words: ['soccer', 'tennis', 'boxing', 'surfing', 'chess', 'bowling', 'hockey', 'archery', 'skiing', 'golf'] },
+  { name: 'Space', words: ['rocket', 'planet', 'comet', 'galaxy', 'orbit', 'telescope', 'satellite', 'asteroid', 'astronaut', 'nebula'] },
+  { name: 'Golden record', words: ['whale', 'thunder', 'laughter', 'heartbeat', 'footsteps', 'crickets', 'volcano', 'earthquake', 'rain', 'wind'] },
+  { name: 'Rocket launch', words: ['launch', 'countdown', 'parachute', 'engine', 'fuel', 'nosecone', 'fins', 'altitude', 'payload', 'ignition'] },
+  { name: 'Road trip', words: ['train', 'motel', 'highway', 'desert', 'ticket', 'suitcase', 'diner', 'taxi', 'tunnel', 'campsite'] },
+  { name: 'Places in the book', words: ['rockview', 'colorado', 'albuquerque', 'nevada', 'vegas', 'california', 'florida', 'canaveral', 'jersey'] },
+  { name: 'Recording kit', words: ['ipod', 'headphones', 'microphone', 'battery', 'playlist', 'speaker', 'earbuds', 'charger', 'volume', 'pause'] },
+  { name: 'Family', words: ['brother', 'sister', 'mother', 'father', 'cousin', 'grandma', 'uncle', 'aunt', 'puppy', 'roommate'] },
 ];
 
 export const MAX_CLUE_LENGTH = 20;
