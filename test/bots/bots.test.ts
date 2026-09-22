@@ -11,20 +11,22 @@ import {
   nextUtcMidnight,
   pureAgreement,
   readFrom,
+  retryNote,
   validateOutput,
   type BotBackend,
 } from '../../src/worker/bots';
 import { FALLBACK_CLUES, ruleVote, ScriptedBackend } from '../../src/worker/backends/scripted';
 import { FAKE_CLUES, FAKE_LINE, FakeBackend } from '../../src/worker/backends/fake';
 import { PERSONAS, styleSheet, type BotInputs } from '../../src/worker/prompts';
+import { DURATIONS } from '../../src/game/rules';
 
-/** One human and five bots, started with the first seed whose state satisfies `pred`. */
+/** One human and five bots, started with the first seed whose state satisfies `pred`, past the deal and into the first clue turn. */
 function started(pred: (s: RoomState) => boolean = () => true): RoomState {
   for (let seed = 1; seed < 1000; seed++) {
     let s = createRoom('ABCD', 0);
     s = apply(s, { type: 'join', playerId: 'p0', displayName: 'Ada', at: 0 }).state;
     s = apply(s, { type: 'start', playerId: 'p0', at: 1000, seed }).state;
-    if (pred(s)) return s;
+    if (pred(s)) return apply(s, { type: 'timeout', at: 1000 + DURATIONS.deal }).state;
   }
   throw new Error('no seed satisfies the predicate');
 }
@@ -144,21 +146,21 @@ describe('validateOutput', () => {
     });
   });
 
-  it('lets a bot use emoji once a human has, and silences a bot after its fourth line or within 8s of its last', () => {
+  it('lets a bot use emoji once a human has, and silences a bot after its seventh line or within 6s of its last', () => {
     let s = inChat();
     const bot = s.seats.find((x) => x.kind === 'bot')!;
     s = apply(s, { type: 'chat', playerId: 'p0', text: 'ok 😀', at: 5 }).state;
     let inputs = buildInputs(s, turn(bot.index, 'chat'));
     expect(validateOutput(s, inputs, { say: 'hm 🤔' }, 9)).toMatchObject({ ok: true });
-    for (let i = 0; i < 3; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 10_000 * (i + 1) }).state;
+    for (let i = 0; i < 6; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 10_000 * (i + 1) }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
-    expect(canSpeak(s, bot.index, 30_500)).toBe(false);
-    expect(validateOutput(s, inputs, { say: 'too soon' }, 30_500)).toEqual({ ok: true, event: null });
-    expect(canSpeak(s, bot.index, 38_000)).toBe(true);
-    expect(validateOutput(s, inputs, { say: 'still fine' }, 38_000)).toMatchObject({ ok: true, event: { text: 'still fine' } });
-    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 3', at: 38_000 }).state;
+    expect(canSpeak(s, bot.index, 65_999)).toBe(false);
+    expect(validateOutput(s, inputs, { say: 'too soon' }, 65_999)).toEqual({ ok: true, event: null });
+    expect(canSpeak(s, bot.index, 66_000)).toBe(true);
+    expect(validateOutput(s, inputs, { say: 'still fine' }, 66_000)).toMatchObject({ ok: true, event: { text: 'still fine' } });
+    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 6', at: 66_000 }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
-    expect(validateOutput(s, inputs, { say: 'one more thing' }, 60_000)).toEqual({ ok: true, event: null });
+    expect(validateOutput(s, inputs, { say: 'one more thing' }, 100_000)).toEqual({ ok: true, event: null });
   });
 
   it('recheckChat drops a line another seat has since said, or one the bot cannot post anymore', () => {
@@ -377,6 +379,43 @@ describe('BotRunner', () => {
     expect(r.readOf(bot.index)).toEqual({ suspect: other.index, reason: 'copycat' });
   });
 
+  it('retries the primary once with the rejection reason when a chat line fails the style check, then falls back', async () => {
+    const seen: BotInputs[] = [];
+    const primary: BotBackend = {
+      run: async (inputs) => {
+        seen.push(inputs);
+        return seen.length === 1 ? { say: 'yeah same', suspect: 1, reason: 'x' } : { say: 'fox your second clue was a stretch', suspect: 1, reason: 'x' };
+      },
+    };
+    const fallback = stub({ say: null });
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    const event = await runner(primary, fallback).turn(s, turn(bot.index, 'chat', 'react'));
+    expect(event).toMatchObject({ type: 'botChat', text: 'fox your second clue was a stretch' });
+    expect(seen).toHaveLength(2);
+    expect(seen[1].retry).toMatch(/only agreed/);
+    expect(fallback.calls).toBe(0);
+  });
+
+  it('gives up after one retry and falls back', async () => {
+    const primary = stub({ say: 'yeah same', suspect: 1, reason: 'x' });
+    const fallback = stub({ say: null });
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    expect(await runner(primary, fallback).turn(s, turn(bot.index, 'chat'))).toBeNull();
+    expect(primary.calls).toBe(2);
+    expect(fallback.calls).toBe(1);
+  });
+
+  it('retryNote knows the chat rejections and nothing else', () => {
+    expect(retryNote('say-agree')).toMatch(/only agreed/);
+    expect(retryNote('say-filler')).toMatch(/filler/);
+    expect(retryNote('say-duplicate')).toMatch(/already/);
+    expect(retryNote('say-leaks-word')).toMatch(/secret word/);
+    expect(retryNote('clue-missing')).toBeNull();
+    expect(retryNote('bot-timeout')).toBeNull();
+  });
+
   it('stops calling the primary after the per-round budget and resets on a new round', async () => {
     const primary = stub({ clue: 'brick' });
     const fallback = stub({ clue: 'fall' });
@@ -387,6 +426,28 @@ describe('BotRunner', () => {
     expect(primary.calls).toBe(2);
     const nextRound = started((s) => crewBotFirst(s) && s.round!.seed !== clueState.round!.seed);
     expect(await r.turn(nextRound, clueTurn)).toMatchObject({ word: 'brick' });
+    expect(primary.calls).toBe(3);
+  });
+
+  it('keeps the last seats.length calls of the budget for non-chat turns', async () => {
+    const chatting = inChat();
+    const bots = chatting.seats.filter((x) => x.kind === 'bot');
+    const other = (bots[0].index + 1) % 6;
+    // One reply serves both actions; the runner only reads the field its action validates.
+    const primary = stub({ say: 'that second clue was a stretch', vote: other, suspect: other, reason: 'x' });
+    const fallback = stub({ say: null, vote: other });
+    // Six seats, so chat may spend two of these eight calls and the other six are held back.
+    const r = runner(primary, fallback, { budgetPerRound: 8 });
+    expect(await r.turn(chatting, turn(bots[0].index, 'chat'))).toMatchObject({ type: 'botChat' });
+    expect(await r.turn(chatting, turn(bots[1].index, 'chat'))).toMatchObject({ type: 'botChat' });
+    expect(await r.turn(chatting, turn(bots[2].index, 'chat'))).toBeNull();
+    expect(primary.calls).toBe(2);
+    expect(fallback.calls).toBe(1);
+
+    // Same round, so the count carries over; the vote still reaches the model instead of voting by rule.
+    const voting = apply(chatting, { type: 'timeout', at: 200_000 }).state;
+    expect(voting.round!.seed).toBe(chatting.round!.seed);
+    expect(await r.turn(voting, turn(bots[0].index, 'vote'))).toMatchObject({ type: 'botVote', target: other });
     expect(primary.calls).toBe(3);
   });
 

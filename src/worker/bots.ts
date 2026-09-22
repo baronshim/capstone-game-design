@@ -56,10 +56,10 @@ export function readFrom(inputs: BotInputs, raw: unknown): Read | null {
   return { suspect, reason: reason || 'gut feeling' };
 }
 
-/** Chat lines a bot may post per round; a talkative human manages about this many in 90 seconds. */
-export const MAX_BOT_LINES_PER_ROUND = 4;
-/** A bot never posts two lines closer together than this; people do not double-post half a second apart. */
-export const MIN_BOT_GAP_MS = 8000;
+/** Chat lines a bot may post per round; a talkative human manages about this many in 150 seconds. */
+export const MAX_BOT_LINES_PER_ROUND = 7;
+/** A bot never posts two lines closer together than this; people do not double-post seconds apart. */
+export const MIN_BOT_GAP_MS = 6000;
 
 /** True when the seat is still under its line cap and its last line is old enough (spec 5.5). */
 export function canSpeak(state: RoomState, seat: number, now: number): boolean {
@@ -87,7 +87,7 @@ export function recheckChat(state: RoomState, turn: BotTurn, text: string, now: 
 const AGREE = /^(yeah|yep|yea|ya|yup|same|agreed?|true|exactly|right|this|facts|i agree|i think so too|good point|fair)\b/i;
 
 /** Model-speak that reads as a bot in this game's chat (seen live 2026-09-16). Matched as whole words, case-insensitive. */
-const FILLER = /\b(definitely|sus|vibes|for real|honestly|tbh|lol|haha|let'?s go+|hyped?|ready to (win|play|go))\b/i;
+export const FILLER = /\b(definitely|sus|vibes|for real|honestly|tbh|lol|haha|let'?s go+|hyped?|ready to (win|play|go))\b/i;
 
 const EMOJI = /\p{Extended_Pictographic}/u;
 
@@ -173,8 +173,22 @@ export function validateOutput(state: RoomState, inputs: BotInputs, raw: unknown
   }
 }
 
+/** What to tell the model when its chat line was rejected, or null when the failure is not one a rewrite would fix. */
+export function retryNote(reason: string): string | null {
+  const why: Record<string, string> = {
+    'say-filler': 'it leaned on filler words',
+    'say-emoji': 'it used an emoji and nobody here does',
+    'say-duplicate': 'it made a point someone already made',
+    'say-agree': 'it only agreed with someone',
+    'say-leaks-word': 'it contained the secret word',
+    'say-too-long': 'it was too long',
+  };
+  const w = why[reason];
+  return w ? `Your last line was rejected because ${w}. Write a different line, or reply null.` : null;
+}
+
 export interface RunnerOptions {
-  /** Primary-backend calls allowed per round (spec 4.5). */
+  /** Primary-backend calls allowed per round; chat turns stop one seat's worth short of it (spec 4.5). */
   budgetPerRound: number;
   /** Milliseconds before a primary call is abandoned (spec 4.5). */
   timeoutMs: number;
@@ -186,7 +200,7 @@ export interface RunnerOptions {
   onFallback?: (action: string, reason: string) => void;
 }
 
-export const DEFAULT_BUDGET = 60;
+export const DEFAULT_BUDGET = 100;
 export const DEFAULT_TIMEOUT_MS = 5000;
 
 /** Runs bot turns: primary backend first, scripted fallback on any failure, per-round budget, daily autopilot. */
@@ -223,22 +237,43 @@ export class BotRunner {
     // A bot that cannot post anyway does not spend a model call.
     if (turn.action === 'chat' && !canSpeak(state, turn.seat, this.opts.now())) return null;
     const inputs = buildInputs(state, turn, this.reads.get(turn.seat) ?? null);
-    if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < this.opts.budgetPerRound) {
-      this.primaryCalls++;
-      const result = await this.callPrimary(inputs);
-      if (result.ok) {
-        const read = readFrom(inputs, result.raw);
+    const cap = this.capFor(state, turn);
+    if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < cap) {
+      let attempt = inputs;
+      for (let tries = 0; tries < 2 && this.primaryCalls < cap; tries++) {
+        this.primaryCalls++;
+        const result = await this.callPrimary(attempt);
+        if (!result.ok) {
+          this.opts.onFallback?.(inputs.action, result.reason);
+          break;
+        }
+        const read = readFrom(attempt, result.raw);
         if (read) this.reads.set(turn.seat, read);
-        const v = validateOutput(state, inputs, result.raw, this.opts.now());
+        const v = validateOutput(state, attempt, result.raw, this.opts.now());
         if (v.ok) return v.event;
-        this.opts.onFallback?.(inputs.action, v.reason);
-      } else {
-        this.opts.onFallback?.(inputs.action, result.reason);
+        const note = attempt.action === 'chat' && tries === 0 ? retryNote(v.reason) : null;
+        if (!note) {
+          this.opts.onFallback?.(inputs.action, v.reason);
+          break;
+        }
+        attempt = { ...attempt, retry: note };
       }
     }
     const raw = await this.fallback.run(inputs).catch(() => null);
     const v = validateOutput(state, inputs, raw, this.opts.now());
     return v.ok ? v.event : null;
+  }
+
+  /**
+   * How many primary calls this turn may have spent by the time it runs. Chat
+   * and reply ticks stop one seat's worth of calls short of the budget: they
+   * are scheduled first and in bulk, and the vote, steal and bot-call turns
+   * come last, so without the reserve chat would eat the budget and every bot
+   * would fall back to the deterministic rule vote (spec 4.5).
+   */
+  private capFor(state: RoomState, turn: BotTurn): number {
+    const reserve = turn.action === 'chat' ? state.seats.length : 0;
+    return Math.max(0, this.opts.budgetPerRound - reserve);
   }
 
   private async callPrimary(inputs: BotInputs): Promise<{ ok: true; raw: unknown } | { ok: false; reason: string }> {

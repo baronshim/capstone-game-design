@@ -1,5 +1,7 @@
 import type { BotCall, ClientMessage, Phase, ServerMessage, Snapshot } from '../game/protocol';
-import { botcallHtml, cardHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, verdictHtml, voteHtml } from './views';
+import { DURATIONS } from '../game/rules';
+import { chime, ding, isMuted, setMuted, tap, tickSound, unlock } from './sound';
+import { BANNERS, botcallHtml, cardHtml, dealHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, typingHtml, verdictHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -26,9 +28,43 @@ let pendingCalls: BotCall[] = [];
 /** The seat the viewer last voted for this phase, so the pick stays highlighted. */
 let myVote: number | null = null;
 let lastPhase: Phase | null = null;
+/** Seats seen typing, each mapped to the time its indicator should come down. */
+const typing = new Map<number, number>();
+/** Transcript lines per seat as of the last snapshot: a seat that just posted is no longer typing. */
+const lastLineBySeat = new Map<number, number>();
+/** The last typing ping this client sent, so it pings no faster than the room relays. */
+let lastPing = 0;
+const TYPING_PING_MS = 1500;
+/** Whether the clue turn was the viewer's at the last render, so the nudge fires once per turn. */
+let lastTurnMine = false;
+/** Transcript length at the last render, to sound a tap only on lines that are new. */
+let lastLineCount = 0;
+/** The last whole second a tick sounded, so each of the final five seconds ticks once. */
+let lastTickSecond = -1;
+/** Timer that takes the transition banner back down. */
+let bannerTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Shows the transition banner for a couple of seconds. `mine` paints it as the viewer's own cue;
+ * `belowCard` drops it under the word card, for the deal, whose whole point is reading that card.
+ */
+function banner(title: string, sub: string, mine = false, belowCard = false): void {
+  const el = $('banner');
+  $('banner-title').textContent = title;
+  $('banner-sub').textContent = sub;
+  el.classList.toggle('mine', mine);
+  el.classList.toggle('below', belowCard);
+  el.classList.add('show');
+  if (bannerTimer !== null) clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
 
 function showError(message: string): void {
   $('error').textContent = message;
+}
+
+function sendRaw(msg: ClientMessage): void {
+  if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
 }
 
 function send(msg: ClientMessage): void {
@@ -36,7 +72,47 @@ function send(msg: ClientMessage): void {
   // (e.g. "one word only") stays visible until then instead of being wiped
   // by the state snapshot that follows it.
   showError('');
-  if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+  sendRaw(msg);
+}
+
+/** Tells the room this seat is writing, no more often than the room would relay it. */
+function pingTyping(value: string): void {
+  const now = Date.now();
+  if (value.trim() === '' || now - lastPing < TYPING_PING_MS) return;
+  lastPing = now;
+  sendRaw({ type: 'typing' });
+}
+
+/** The seats whose typing window is still open. */
+function typingNow(): Set<number> {
+  const now = Date.now();
+  return new Set([...typing].filter(([, until]) => until > now).map(([seat]) => seat));
+}
+
+/**
+ * Repaints only what a typing indicator changes: the seat chips and the line
+ * under the transcript. A full render() would rebuild the transcript and pull
+ * it back to the bottom, and with five chatty bots that happens many times a
+ * minute, so nobody could scroll back to reread the clues.
+ */
+function paintTyping(): void {
+  if (!snapshot) return;
+  const now = typingNow();
+  $('seats').innerHTML = seatsHtml(snapshot, now);
+  $('typing').innerHTML = typingHtml(snapshot, now);
+}
+
+/** Drops typing indicators whose window has passed. Returns true when one came down. */
+function pruneTyping(): boolean {
+  const now = Date.now();
+  let changed = false;
+  for (const [seat, until] of typing) {
+    if (until <= now) {
+      typing.delete(seat);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function connect(code: string): void {
@@ -80,6 +156,15 @@ function leave(): void {
   }
   snapshot = null;
   lastPhase = null;
+  lastTurnMine = false;
+  lastLineCount = 0;
+  if (bannerTimer !== null) {
+    clearTimeout(bannerTimer);
+    bannerTimer = null;
+  }
+  $('banner').classList.remove('show');
+  typing.clear();
+  lastLineBySeat.clear();
   roomCode = '';
   showError('');
   history.replaceState(null, '', location.pathname);
@@ -96,8 +181,19 @@ function handle(msg: ServerMessage): void {
     }
     return;
   }
+  if (msg.type === 'typing') {
+    typing.set(msg.seat, Date.now() + msg.ms);
+    paintTyping();
+    return;
+  }
   retries = 0;
   snapshot = msg.snapshot;
+  // A seat that just posted has stopped typing, whatever its window said.
+  for (const seat of msg.snapshot.seats) {
+    const lines = msg.snapshot.transcript.filter((l) => l.seat === seat.index).length;
+    if (lines > (lastLineBySeat.get(seat.index) ?? 0)) typing.delete(seat.index);
+    lastLineBySeat.set(seat.index, lines);
+  }
   history.replaceState(null, '', `?room=${roomCode}`);
   render();
 }
@@ -118,8 +214,29 @@ function render(): void {
   if (ph !== lastPhase) {
     pendingCalls = snap.seats.map(() => null);
     myVote = null;
+    typing.clear();
+    // Not on the first snapshot after joining: that one is the room as found, not a transition.
+    if (lastPhase !== null) {
+      banner(BANNERS[ph].title, BANNERS[ph].sub, false, ph === 'deal');
+      chime();
+    }
+    lastTurnMine = false;
+    lastLineCount = 0;
     lastPhase = ph;
   }
+  if (myTurn && !lastTurnMine) {
+    banner('Your turn', `Round ${snap.round!.cluePass} of 2 · one word`, true);
+    ding();
+  }
+  lastTurnMine = myTurn;
+  // A tap for lines somebody else just posted, never for the transcript as first loaded.
+  const lines = snap.transcript.length;
+  if (lines > lastLineCount && lastLineCount > 0 && ph === 'chat') {
+    const last = snap.transcript[lines - 1];
+    if (last.seat !== snap.you) tap();
+  }
+  lastLineCount = lines;
+  const writing = typingNow();
 
   $('home').hidden = true;
   $('room').hidden = false;
@@ -129,7 +246,9 @@ function render(): void {
 
   show('card', snap.round !== null && ph !== 'lobby');
   $('card').innerHTML = cardHtml(snap);
-  $('seats').innerHTML = seatsHtml(snap);
+  show('deal', ph === 'deal');
+  $('deal').innerHTML = dealHtml(snap);
+  $('seats').innerHTML = seatsHtml(snap, writing);
   $('seats').classList.toggle('compact', ph === 'chat');
   show('start', ph === 'lobby' && seated);
   show('lobby-hint', ph === 'lobby' && seated);
@@ -164,8 +283,12 @@ function render(): void {
   show('composer', chatOpen);
   const log = $('log');
   log.classList.toggle('readonly', !chatOpen);
+  // Only follow the chat for someone already at the bottom; anyone scrolled up is rereading the clues.
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.innerHTML = logHtml(snap);
-  log.scrollTop = log.scrollHeight;
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  $('typing').innerHTML = typingHtml(snap, writing);
+  show('typing', logVisible);
 
   if (myTurn) $('clue').focus();
   if (ph === 'steal' && imposter) $('steal').focus();
@@ -173,28 +296,52 @@ function render(): void {
 }
 
 function tick(): void {
+  if (pruneTyping()) paintTyping();
   const end = snapshot?.phaseEndsAt ?? null;
   const timer = $('timer');
+  const bar = $('progress');
   if (end === null) {
     timer.textContent = '';
     timer.className = 'timer';
+    bar.style.width = '0';
+    bar.className = '';
     return;
   }
   const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
   timer.textContent = `${left}s`;
   timer.className = `timer${left === 0 ? ' out' : left <= 5 ? ' low' : ''}`;
+  // The bar drains over the phase's full length; `clue` is timed per turn.
+  const key = snapshot!.phase === 'clue' ? 'clueTurn' : snapshot!.phase;
+  const total = (DURATIONS as Record<string, number>)[key] ?? 0;
+  const remaining = Math.max(0, end - Date.now());
+  bar.style.width = total ? `${(100 * remaining) / total}%` : '0';
+  bar.className = left === 0 ? 'out' : left <= 5 ? 'low' : '';
+  // The deal is only six seconds long, so a five-second countdown would tick through nearly all of it.
+  if (left <= 5 && left > 0 && left !== lastTickSecond && snapshot!.phase !== 'deal') tickSound();
+  lastTickSecond = left;
 }
 setInterval(tick, 250);
 
 $('create').onclick = async () => {
+  unlock();
   const res = await fetch('/rooms', { method: 'POST' });
   const { code } = (await res.json()) as { code: string };
   connect(code);
 };
 
-$('join').onclick = () => connect($<HTMLInputElement>('code').value);
-$('start').onclick = () => send({ type: 'start' });
-$('again').onclick = () => send({ type: 'again' });
+$('join').onclick = () => {
+  unlock();
+  connect($<HTMLInputElement>('code').value);
+};
+// A player who rejoined from a shared link never clicked Create or Join, so this is their first gesture.
+$('start').onclick = () => {
+  unlock();
+  send({ type: 'start' });
+};
+$('again').onclick = () => {
+  unlock();
+  send({ type: 'again' });
+};
 $('leave').onclick = leave;
 
 const help = $<HTMLDialogElement>('help');
@@ -217,6 +364,10 @@ $('copy-link').onclick = async () => {
   }
   setTimeout(() => (button.textContent = 'Copy invite link'), 2500);
 };
+
+for (const id of ['text', 'clue']) {
+  $<HTMLInputElement>(id).addEventListener('input', (e) => pingTyping((e.target as HTMLInputElement).value));
+}
 
 $<HTMLFormElement>('composer').onsubmit = (e) => {
   e.preventDefault();
@@ -253,13 +404,34 @@ $('botcall').onclick = (e) => {
 
 $('lock-calls').onclick = () => send({ type: 'botcall', calls: pendingCalls });
 
+const mute = $('mute');
+function paintMute(): void {
+  mute.classList.toggle('off', isMuted());
+  mute.title = isMuted() ? 'Sound off' : 'Sound on';
+  mute.setAttribute('aria-pressed', String(isMuted()));
+}
+mute.onclick = () => {
+  setMuted(!isMuted());
+  unlock();
+  paintMute();
+};
+paintMute();
+
+// Most players never click Create or Join: they open a shared ?room= link and are connected
+// automatically, and a non-host clicks nothing until the vote. Any gesture anywhere unlocks the
+// audio context instead. Not `{ once: true }`: resume() can fail, and the next gesture retries.
+document.addEventListener('pointerdown', unlock);
+document.addEventListener('keydown', unlock);
+
 const nameInput = $<HTMLInputElement>('name');
 const savedName = localStorage.getItem('name');
 if (savedName) nameInput.value = savedName;
 nameInput.addEventListener('change', () => localStorage.setItem('name', nameInput.value));
 
 $<HTMLInputElement>('code').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') connect($<HTMLInputElement>('code').value);
+  if (e.key !== 'Enter') return;
+  unlock();
+  connect($<HTMLInputElement>('code').value);
 });
 
 const roomParam = new URLSearchParams(location.search).get('room');

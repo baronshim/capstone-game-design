@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { apply, createRoom, type RoomState } from '../../src/game/state';
 import { redact } from '../../src/game/redact';
+import { DURATIONS } from '../../src/game/rules';
 
 function lobby(): RoomState {
   let state = createRoom('ABCD', 0);
@@ -23,7 +24,7 @@ const SEED = (() => {
 })();
 
 function inClue(): RoomState {
-  return startWith(SEED);
+  return apply(startWith(SEED), { type: 'timeout', at: 10 + DURATIONS.deal }).state;
 }
 
 function inChat(): RoomState {

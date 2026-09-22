@@ -28,8 +28,11 @@ console.log('room', code, LIVE ? '(live bots)' : '(fake bots)');
 function client(name, id = crypto.randomUUID()) {
   const ws = new WebSocket(`${WS_BASE}/rooms/${code}/ws`);
   const inbox = [];
+  const box = { latest: null };
   ws.onmessage = (ev) => {
-    inbox.push(JSON.parse(ev.data));
+    const m = JSON.parse(ev.data);
+    inbox.push(m);
+    if (m.type === 'state') box.latest = m.snapshot;
   };
   const open = new Promise((resolve, reject) => {
     ws.onopen = resolve;
@@ -48,7 +51,7 @@ function client(name, id = crypto.randomUUID()) {
   };
   const state = async (pred = () => true, ms) => (await next((m) => m.type === 'state' && pred(m.snapshot), ms)).snapshot;
   const error = async () => (await next((m) => m.type === 'error')).code;
-  return { ws, id, name, open, send, next, state, error };
+  return { ws, id, name, open, send, next, state, error, box };
 }
 
 const a = client('Ada');
@@ -68,8 +71,9 @@ assert.equal(seen.seats[1].kind, 'human', 'own seat kind visible');
 assert.equal(seen.autopilot, false, 'snapshot carries the autopilot flag');
 
 a.send({ type: 'start' });
-let snapA = await a.state((s) => s.phase === 'clue');
-const snapB = await b.state((s) => s.phase === 'clue');
+await a.state((s) => s.phase === 'deal');
+let snapA = await a.state((s) => s.phase === 'clue', 8000);
+const snapB = await b.state((s) => s.phase === 'clue', 8000);
 assert.equal(snapA.seats.length, 6, 'six seats after start');
 assert.ok(snapA.seats.every((s) => typeof s.alias === 'string'), 'every seat has an alias');
 assert.ok(snapA.seats.every((s) => s.connected), 'bots count as connected');
@@ -159,6 +163,32 @@ const ghostMsg = await new Promise((resolve, reject) => {
   setTimeout(() => reject(new Error('ghost: timed out')), 3000);
 });
 assert.equal(ghostMsg.code, 'room-not-found');
+
+// Print the transcript and every bot's clues from the last snapshot seen, so a live run can be eyeballed for bot voice.
+const finalSnap = a.box.latest ?? b2.box.latest ?? null;
+if (!finalSnap) {
+  console.log('(no snapshot to print transcript from)');
+} else {
+  console.log('--- transcript ---');
+  if (finalSnap.transcript.length === 0) {
+    console.log('(no chat lines)');
+  } else {
+    for (const line of finalSnap.transcript) {
+      const seat = finalSnap.seats.find((s) => s.index === line.seat);
+      console.log(`${seat?.alias ?? `seat ${line.seat}`}: ${line.text}`);
+    }
+  }
+  console.log('--- bot clues ---');
+  const botSeats = finalSnap.seats.filter((s) => s.index !== snapA.you && s.index !== snapB.you);
+  if (botSeats.length === 0) {
+    console.log('(no bot seats)');
+  } else {
+    for (const seat of botSeats) {
+      const clues = seat.clues.filter((c) => c !== '').join(', ');
+      console.log(`${seat.alias ?? `seat ${seat.index}`}: ${clues || '(no clue)'}`);
+    }
+  }
+}
 
 console.log(`SMOKE OK (${LIVE ? 'live' : 'fake'} bots through the chat phase; vote, steal, bot call, and reveal are covered by test/worker/round.test.ts)`);
 process.exit(0);

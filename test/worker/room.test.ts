@@ -31,12 +31,53 @@ describe('Room Durable Object', () => {
     expect(JSON.stringify(seen)).not.toContain('"playerId"');
   });
 
+  it('relays a typing ping to the other seats only, and throttles repeats', async () => {
+    const { a, b } = await lobbyWithTwo();
+    a.send({ type: 'typing' });
+    const seen = await b.next((m) => m.type === 'typing');
+    expect(seen).toEqual({ type: 'typing', seat: 0, ms: 3000 });
+    a.send({ type: 'typing' });
+    a.send({ type: 'chat', text: 'done typing' });
+    await b.state((s) => s.transcript.some((l) => l.text === 'done typing'));
+    // The second ping came within 1.5s of the first, so nothing else arrived before the chat line.
+    await expect(b.next((m) => m.type === 'typing')).rejects.toThrow(/timed out/);
+  }, 8000);
+
+  it('never relays a typing ping from a phase, or a clue turn, that seat could not be writing in', async () => {
+    const { code, a, b } = await lobbyWithTwo();
+    a.send({ type: 'start' });
+    const dealA = await a.state((s) => s.phase === 'deal');
+    const dealB = await b.state((s) => s.phase === 'deal');
+    // Nobody types during the deal, so a chip there would only ever be a bot.
+    a.send({ type: 'typing' });
+    await expect(b.next((m) => m.type === 'typing' && m.seat === dealA.you)).rejects.toThrow(/timed out/);
+
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    // Fake bots clue at once, so the phase settles on the first human turn and waits there.
+    const seats = [dealA.you!, dealB.you!];
+    const clue = await a.state((s) => s.phase === 'clue' && seats.includes(s.round!.clueSeat!));
+    const onTurn = clue.round!.clueSeat === dealA.you ? a : b;
+    const offTurn = onTurn === a ? b : a;
+    const offSeat = onTurn === a ? dealB.you : dealA.you;
+    // The seat that is not on turn has no box to type in.
+    offTurn.send({ type: 'typing' });
+    await expect(onTurn.next((m) => m.type === 'typing' && m.seat === offSeat)).rejects.toThrow(/timed out/);
+    // The seat that is on turn still relays, so the gate is on the phase and the turn, not on typing itself.
+    onTurn.send({ type: 'typing' });
+    expect(await offTurn.next((m) => m.type === 'typing' && m.seat === clue.round!.clueSeat)).toEqual({
+      type: 'typing',
+      seat: clue.round!.clueSeat,
+      ms: 3000,
+    });
+  }, 20000);
+
   it('start fills six aliased seats, clears the transcript, and redacts other seats', async () => {
     const { a, b } = await lobbyWithTwo();
     a.send({ type: 'chat', text: 'lobby talk' });
     await b.state((s) => s.transcript.length === 1);
     a.send({ type: 'start' });
-    const started = await b.state((s) => s.phase === 'clue');
+    const started = await b.state((s) => s.phase === 'deal');
     expect(started.seats).toHaveLength(6);
     expect(started.seats.every((s) => typeof s.alias === 'string')).toBe(true);
     expect(started.transcript).toEqual([]);

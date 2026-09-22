@@ -6,9 +6,14 @@ import type { ClientMessage, ServerMessage } from '../game/protocol';
 import { type BotRunner, makeRunner, recheckChat } from './bots';
 
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
-/** Typing-time simulation for bot chat (spec 5.5): 30ms per character, at most 2.5s. */
-export const TYPING_MS_PER_CHAR = 30;
-export const MAX_TYPING_MS = 2500;
+/** Typing-time simulation for bot chat (spec 5.5): 55ms per character, at most 6s, so a line lands when a person could have typed it. */
+export const TYPING_MS_PER_CHAR = 55;
+export const MAX_TYPING_MS = 6000;
+/** A human typing ping shows for this long on the other screens, and repeats from one seat are dropped inside the throttle window. */
+export const HUMAN_TYPING_MS = 3000;
+const TYPING_THROTTLE_MS = 1500;
+/** A bot "types" its clue for this long after the model answers, so the chip does not appear the instant the model returns. */
+export const CLUE_TYPING_MS = 2500;
 
 interface Attachment {
   playerId: string | null;
@@ -21,6 +26,8 @@ export class RoomObject extends DurableObject<Env> {
   private queue: Promise<void> = Promise.resolve();
   /** Fake bots act at once so tests and local play do not wait out the jitter. */
   private readonly instant: boolean;
+  /** Seat index to the time its last typing ping was relayed, for the per-seat throttle. */
+  private lastTyping = new Map<number, number>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -110,6 +117,9 @@ export class RoomObject extends DurableObject<Env> {
       event = { type: 'botcall', playerId: att.playerId, calls: calls.map((c) => (c === 'human' || c === 'bot' ? c : null)), at };
     } else if (msg.type === 'again') {
       event = { type: 'again', playerId: att.playerId, at };
+    } else if (msg.type === 'typing') {
+      this.relayTyping(att.playerId, at);
+      return;
     } else {
       this.send(ws, { type: 'error', code: 'unknown-type', message: 'Unknown message type' });
       return;
@@ -192,6 +202,32 @@ export class RoomObject extends DurableObject<Env> {
     }
   }
 
+  /** Relays a seated human's typing ping to the other seated sockets, throttled per seat and only when that seat could be writing. */
+  private relayTyping(playerId: string, at: number): void {
+    if (!this.state) return;
+    const seat = this.state.seats.find((s) => s.playerId === playerId);
+    if (!seat) return;
+    const ph = this.state.phase;
+    const writing =
+      ph === 'lobby' || ph === 'chat' || ph === 'reveal' || (ph === 'clue' && this.state.round?.clueSeat === seat.index);
+    if (!writing) return;
+    const last = this.lastTyping.get(seat.index) ?? 0;
+    if (at - last < TYPING_THROTTLE_MS) return;
+    this.lastTyping.set(seat.index, at);
+    this.broadcastTyping(seat.index, HUMAN_TYPING_MS, playerId);
+  }
+
+  /** Sends a typing message to every seated socket except the one belonging to `except`. */
+  private broadcastTyping(seat: number, ms: number, except: string | null = null): void {
+    if (!this.state) return;
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as Attachment;
+      if (att.playerId === null || att.playerId === except) continue;
+      if (!this.state.seats.some((s) => s.playerId === att.playerId)) continue;
+      this.send(ws, { type: 'typing', seat, ms });
+    }
+  }
+
   /** Runs a bot turn after its delay. The turn remembers its round, so one from an earlier round is dropped. */
   private scheduleBot(turn: BotTurn): void {
     const seed = this.state?.round?.seed;
@@ -204,17 +240,39 @@ export class RoomObject extends DurableObject<Env> {
       if (!this.state?.round || this.state.round.seed !== seed) return;
       const event = await this.runner.turn(this.state, turn);
       if (!event) return;
+      if (event.type === 'botClue') {
+        // The round may have moved on while the model was thinking; the reducer also guards the pass and the turn.
+        // A chip for a seat whose turn has passed is a bot tell, so the check comes before the broadcast.
+        if (!this.stillClueing(seed, turn.seat)) return;
+        this.broadcastTyping(turn.seat, CLUE_TYPING_MS);
+        if (!this.instant) await new Promise((r) => setTimeout(r, CLUE_TYPING_MS));
+        if (!this.stillClueing(seed, turn.seat)) return;
+        await this.dispatch({ ...event, at: Date.now() });
+        return;
+      }
       if (event.type !== 'botChat') {
         await this.dispatch(event);
         return;
       }
-      if (!this.instant) await new Promise((r) => setTimeout(r, Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length)));
+      // Chat ticks are drawn across the whole chat phase and the model call sits on top of that, so a
+      // late one can land after the vote has opened. Humans cannot ping outside chat, so a chip then
+      // is a bot tell: drop the turn before anything is broadcast or posted.
+      if (this.state?.phase !== 'chat' || this.state.round?.seed !== seed) return;
+      const typingMs = Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length);
+      this.broadcastTyping(turn.seat, typingMs);
+      if (!this.instant) await new Promise((r) => setTimeout(r, typingMs));
       // Another bot may have said it, or this one may have just spoken, while the line was "being typed".
       if (!this.state || !recheckChat(this.state, turn, event.text, Date.now())) return;
       await this.dispatch({ ...event, at: Date.now() });
     } catch (err) {
       console.warn(`bot ${turn.action} for seat ${turn.seat} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** True while the room is still waiting on this seat's clue in the round the turn was scheduled for. */
+  private stillClueing(seed: number, seat: number): boolean {
+    const round = this.state?.round;
+    return this.state?.phase === 'clue' && round?.seed === seed && round.clueSeat === seat;
   }
 
   /** Mirrors the reducer's deadline into the DO alarm, or arms the deletion TTL when idle and empty. */
