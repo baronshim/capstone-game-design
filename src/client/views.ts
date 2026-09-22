@@ -73,7 +73,7 @@ export function cardHtml(snap: Snapshot): string {
   return `<div class="card-inner crew"><div class="card-eyebrow">${esc(r.category)}</div><div class="card-word">${esc(r.word)}</div></div>`;
 }
 
-export function seatsHtml(snap: Snapshot): string {
+export function seatsHtml(snap: Snapshot, typing: Set<number> = new Set()): string {
   return snap.seats
     .map((s) => {
       const color = seatColor(snap, s.index);
@@ -83,14 +83,25 @@ export function seatsHtml(snap: Snapshot): string {
       const cls = ['seat', s.connected ? '' : 'off', turn ? 'turn' : ''].filter(Boolean).join(' ');
       const you = mine ? '<span class="badge-you">you</span>' : '';
       const check = voted ? '<span class="check">✓</span>' : '';
+      const writing = typing.has(s.index) ? '<span class="typing-tag">typing…</span>' : '';
       const chips = s.clues.length
         ? `<span class="clues">${s.clues
             .map((c) => (c ? `<span class="clue-chip">${esc(c)}</span>` : '<span class="clue-chip empty">no clue</span>'))
             .join('')}</span>`
         : '';
-      return `<div class="${cls}" style="--seat:${color}"><span class="sig"><i class="dot"></i><span class="alias">${esc(nameOf(snap, s.index))}</span>${you}${check}</span>${chips}</div>`;
+      return `<div class="${cls}" style="--seat:${color}"><span class="sig"><i class="dot"></i><span class="alias">${esc(nameOf(snap, s.index))}</span>${you}${check}${writing}</span>${chips}</div>`;
     })
     .join('');
+}
+
+/** "Coral Fox is typing…" for seats writing right now, for the line under the transcript. */
+export function typingHtml(snap: Snapshot, typing: Set<number>): string {
+  const names = [...typing]
+    .filter((i) => i !== snap.you)
+    .map((i) => `<b style="color:${seatColor(snap, i)}">${esc(nameOf(snap, i))}</b>`);
+  if (names.length === 0) return '';
+  const verb = names.length === 1 ? 'is' : 'are';
+  return `${names.join(', ')} ${verb} typing…`;
 }
 
 export function turnHtml(snap: Snapshot): string {

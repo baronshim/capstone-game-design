@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env, runDurableObjectAlarm } from 'cloudflare:test';
 import { connect, createRoom, type Client } from './helpers';
-import type { BotCall, Snapshot } from '../../src/game/protocol';
+import type { BotCall, ServerMessage, Snapshot } from '../../src/game/protocol';
 import { FAKE_CLUES, FAKE_LINE } from '../../src/worker/backends/fake';
 
 const NAMES = ['Ada', 'Bob', 'Cal'];
@@ -119,6 +119,18 @@ describe('a round in the Room Durable Object with fake bots', () => {
       }
     }
     expect(chat.seats.flatMap((s) => s.clues).filter((c) => CLUE_WORDS.includes(c))).toHaveLength(6);
+  });
+
+  it('a bot announces typing, so the chip is not a human-only tell', async () => {
+    const room = await startedRoom();
+    const chat = await playClues(room);
+    expect(chat.phase).toBe('chat');
+    const botSeats = new Set(chat.seats.map((s) => s.index).filter((i) => !room.humanSeats.includes(i)));
+    const typed = (await room.clients[0].next(
+      (m) => m.type === 'typing' && botSeats.has(m.seat),
+    )) as Extract<ServerMessage, { type: 'typing' }>;
+    expect(botSeats.has(typed.seat)).toBe(true);
+    expect(typed.ms).toBeGreaterThan(0);
   });
 
   it('rejects out-of-turn and two-word clues, accepts a valid one', async () => {

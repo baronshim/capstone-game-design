@@ -1,5 +1,5 @@
 import type { BotCall, ClientMessage, Phase, ServerMessage, Snapshot } from '../game/protocol';
-import { botcallHtml, cardHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, verdictHtml, voteHtml } from './views';
+import { botcallHtml, cardHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, typingHtml, verdictHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -26,9 +26,20 @@ let pendingCalls: BotCall[] = [];
 /** The seat the viewer last voted for this phase, so the pick stays highlighted. */
 let myVote: number | null = null;
 let lastPhase: Phase | null = null;
+/** Seats seen typing, each mapped to the time its indicator should come down. */
+const typing = new Map<number, number>();
+/** Transcript lines per seat as of the last snapshot: a seat that just posted is no longer typing. */
+const lastLineBySeat = new Map<number, number>();
+/** The last typing ping this client sent, so it pings no faster than the room relays. */
+let lastPing = 0;
+const TYPING_PING_MS = 1500;
 
 function showError(message: string): void {
   $('error').textContent = message;
+}
+
+function sendRaw(msg: ClientMessage): void {
+  if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
 }
 
 function send(msg: ClientMessage): void {
@@ -36,7 +47,28 @@ function send(msg: ClientMessage): void {
   // (e.g. "one word only") stays visible until then instead of being wiped
   // by the state snapshot that follows it.
   showError('');
-  if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+  sendRaw(msg);
+}
+
+/** Tells the room this seat is writing, no more often than the room would relay it. */
+function pingTyping(value: string): void {
+  const now = Date.now();
+  if (value.trim() === '' || now - lastPing < TYPING_PING_MS) return;
+  lastPing = now;
+  sendRaw({ type: 'typing' });
+}
+
+/** Drops typing indicators whose window has passed. Returns true when one came down. */
+function pruneTyping(): boolean {
+  const now = Date.now();
+  let changed = false;
+  for (const [seat, until] of typing) {
+    if (until <= now) {
+      typing.delete(seat);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function connect(code: string): void {
@@ -80,6 +112,8 @@ function leave(): void {
   }
   snapshot = null;
   lastPhase = null;
+  typing.clear();
+  lastLineBySeat.clear();
   roomCode = '';
   showError('');
   history.replaceState(null, '', location.pathname);
@@ -96,8 +130,19 @@ function handle(msg: ServerMessage): void {
     }
     return;
   }
+  if (msg.type === 'typing') {
+    typing.set(msg.seat, Date.now() + msg.ms);
+    render();
+    return;
+  }
   retries = 0;
   snapshot = msg.snapshot;
+  // A seat that just posted has stopped typing, whatever its window said.
+  for (const seat of msg.snapshot.seats) {
+    const lines = msg.snapshot.transcript.filter((l) => l.seat === seat.index).length;
+    if (lines > (lastLineBySeat.get(seat.index) ?? 0)) typing.delete(seat.index);
+    lastLineBySeat.set(seat.index, lines);
+  }
   history.replaceState(null, '', `?room=${roomCode}`);
   render();
 }
@@ -118,8 +163,10 @@ function render(): void {
   if (ph !== lastPhase) {
     pendingCalls = snap.seats.map(() => null);
     myVote = null;
+    typing.clear();
     lastPhase = ph;
   }
+  const typingNow = new Set([...typing].filter(([, until]) => until > Date.now()).map(([seat]) => seat));
 
   $('home').hidden = true;
   $('room').hidden = false;
@@ -129,7 +176,7 @@ function render(): void {
 
   show('card', snap.round !== null && ph !== 'lobby');
   $('card').innerHTML = cardHtml(snap);
-  $('seats').innerHTML = seatsHtml(snap);
+  $('seats').innerHTML = seatsHtml(snap, typingNow);
   $('seats').classList.toggle('compact', ph === 'chat');
   show('start', ph === 'lobby' && seated);
   show('lobby-hint', ph === 'lobby' && seated);
@@ -166,6 +213,8 @@ function render(): void {
   log.classList.toggle('readonly', !chatOpen);
   log.innerHTML = logHtml(snap);
   log.scrollTop = log.scrollHeight;
+  $('typing').innerHTML = typingHtml(snap, typingNow);
+  show('typing', logVisible);
 
   if (myTurn) $('clue').focus();
   if (ph === 'steal' && imposter) $('steal').focus();
@@ -173,6 +222,8 @@ function render(): void {
 }
 
 function tick(): void {
+  // render() calls tick() again, but the expired entries are gone by then, so this settles after one pass.
+  if (pruneTyping()) render();
   const end = snapshot?.phaseEndsAt ?? null;
   const timer = $('timer');
   if (end === null) {
@@ -217,6 +268,10 @@ $('copy-link').onclick = async () => {
   }
   setTimeout(() => (button.textContent = 'Copy invite link'), 2500);
 };
+
+for (const id of ['text', 'clue']) {
+  $<HTMLInputElement>(id).addEventListener('input', (e) => pingTyping((e.target as HTMLInputElement).value));
+}
 
 $<HTMLFormElement>('composer').onsubmit = (e) => {
   e.preventDefault();

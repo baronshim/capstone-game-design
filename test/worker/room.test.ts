@@ -31,6 +31,18 @@ describe('Room Durable Object', () => {
     expect(JSON.stringify(seen)).not.toContain('"playerId"');
   });
 
+  it('relays a typing ping to the other seats only, and throttles repeats', async () => {
+    const { a, b } = await lobbyWithTwo();
+    a.send({ type: 'typing' });
+    const seen = await b.next((m) => m.type === 'typing');
+    expect(seen).toEqual({ type: 'typing', seat: 0, ms: 3000 });
+    a.send({ type: 'typing' });
+    a.send({ type: 'chat', text: 'done typing' });
+    await b.state((s) => s.transcript.some((l) => l.text === 'done typing'));
+    // The second ping came within 1.5s of the first, so nothing else arrived before the chat line.
+    await expect(b.next((m) => m.type === 'typing')).rejects.toThrow(/timed out/);
+  }, 8000);
+
   it('start fills six aliased seats, clears the transcript, and redacts other seats', async () => {
     const { a, b } = await lobbyWithTwo();
     a.send({ type: 'chat', text: 'lobby talk' });

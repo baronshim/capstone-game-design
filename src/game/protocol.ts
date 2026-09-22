@@ -78,8 +78,12 @@ export type ClientMessage =
   | { type: 'vote'; seat: number }
   | { type: 'steal'; word: string }
   | { type: 'botcall'; calls: BotCall[] }
-  | { type: 'again' };
+  | { type: 'again' }
+  /** The sender is writing; ephemeral, rate-limited by the room, never stored. */
+  | { type: 'typing' };
 
 export type ServerMessage =
   | { type: 'state'; snapshot: Snapshot }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string }
+  /** A seat is writing; show an indicator for `ms` milliseconds or until that seat posts. Sent for humans and bots alike so it is not a tell. */
+  | { type: 'typing'; seat: number; ms: number };
