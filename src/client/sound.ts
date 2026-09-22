@@ -7,14 +7,22 @@ try {
   // storage blocked; stay unmuted
 }
 
-/** Create or resume the context. Browsers only allow this from a user gesture. */
+/**
+ * Create or resume the context. Browsers only allow this from a user gesture, and
+ * resume() is asynchronous, so the first cue right after it may still be silent;
+ * every later gesture calls this again. A context that exists is kept even when a
+ * resume is rejected — only a failed constructor leaves us without one.
+ */
 export function unlock(): void {
-  try {
-    ctx ??= new AudioContext();
-    if (ctx.state === 'suspended') void ctx.resume();
-  } catch {
-    ctx = null;
+  if (!ctx) {
+    try {
+      ctx = new AudioContext();
+    } catch {
+      ctx = null;
+      return;
+    }
   }
+  if (ctx.state === 'suspended') ctx.resume().catch(() => undefined);
 }
 
 export function isMuted(): boolean {

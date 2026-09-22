@@ -83,6 +83,25 @@ function pingTyping(value: string): void {
   sendRaw({ type: 'typing' });
 }
 
+/** The seats whose typing window is still open. */
+function typingNow(): Set<number> {
+  const now = Date.now();
+  return new Set([...typing].filter(([, until]) => until > now).map(([seat]) => seat));
+}
+
+/**
+ * Repaints only what a typing indicator changes: the seat chips and the line
+ * under the transcript. A full render() would rebuild the transcript and pull
+ * it back to the bottom, and with five chatty bots that happens many times a
+ * minute, so nobody could scroll back to reread the clues.
+ */
+function paintTyping(): void {
+  if (!snapshot) return;
+  const now = typingNow();
+  $('seats').innerHTML = seatsHtml(snapshot, now);
+  $('typing').innerHTML = typingHtml(snapshot, now);
+}
+
 /** Drops typing indicators whose window has passed. Returns true when one came down. */
 function pruneTyping(): boolean {
   const now = Date.now();
@@ -164,7 +183,7 @@ function handle(msg: ServerMessage): void {
   }
   if (msg.type === 'typing') {
     typing.set(msg.seat, Date.now() + msg.ms);
-    render();
+    paintTyping();
     return;
   }
   retries = 0;
@@ -217,7 +236,7 @@ function render(): void {
     if (last.seat !== snap.you) tap();
   }
   lastLineCount = lines;
-  const typingNow = new Set([...typing].filter(([, until]) => until > Date.now()).map(([seat]) => seat));
+  const writing = typingNow();
 
   $('home').hidden = true;
   $('room').hidden = false;
@@ -229,7 +248,7 @@ function render(): void {
   $('card').innerHTML = cardHtml(snap);
   show('deal', ph === 'deal');
   $('deal').innerHTML = dealHtml(snap);
-  $('seats').innerHTML = seatsHtml(snap, typingNow);
+  $('seats').innerHTML = seatsHtml(snap, writing);
   $('seats').classList.toggle('compact', ph === 'chat');
   show('start', ph === 'lobby' && seated);
   show('lobby-hint', ph === 'lobby' && seated);
@@ -264,9 +283,11 @@ function render(): void {
   show('composer', chatOpen);
   const log = $('log');
   log.classList.toggle('readonly', !chatOpen);
+  // Only follow the chat for someone already at the bottom; anyone scrolled up is rereading the clues.
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.innerHTML = logHtml(snap);
-  log.scrollTop = log.scrollHeight;
-  $('typing').innerHTML = typingHtml(snap, typingNow);
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  $('typing').innerHTML = typingHtml(snap, writing);
   show('typing', logVisible);
 
   if (myTurn) $('clue').focus();
@@ -275,8 +296,7 @@ function render(): void {
 }
 
 function tick(): void {
-  // render() calls tick() again, but the expired entries are gone by then, so this settles after one pass.
-  if (pruneTyping()) render();
+  if (pruneTyping()) paintTyping();
   const end = snapshot?.phaseEndsAt ?? null;
   const timer = $('timer');
   const bar = $('progress');
@@ -296,7 +316,8 @@ function tick(): void {
   const remaining = Math.max(0, end - Date.now());
   bar.style.width = total ? `${(100 * remaining) / total}%` : '0';
   bar.className = left === 0 ? 'out' : left <= 5 ? 'low' : '';
-  if (left <= 5 && left > 0 && left !== lastTickSecond) tickSound();
+  // The deal is only six seconds long, so a five-second countdown would tick through nearly all of it.
+  if (left <= 5 && left > 0 && left !== lastTickSecond && snapshot!.phase !== 'deal') tickSound();
   lastTickSecond = left;
 }
 setInterval(tick, 250);
@@ -387,6 +408,7 @@ const mute = $('mute');
 function paintMute(): void {
   mute.classList.toggle('off', isMuted());
   mute.title = isMuted() ? 'Sound off' : 'Sound on';
+  mute.setAttribute('aria-pressed', String(isMuted()));
 }
 mute.onclick = () => {
   setMuted(!isMuted());
@@ -394,6 +416,12 @@ mute.onclick = () => {
   paintMute();
 };
 paintMute();
+
+// Most players never click Create or Join: they open a shared ?room= link and are connected
+// automatically, and a non-host clicks nothing until the vote. Any gesture anywhere unlocks the
+// audio context instead. Not `{ once: true }`: resume() can fail, and the next gesture retries.
+document.addEventListener('pointerdown', unlock);
+document.addEventListener('keydown', unlock);
 
 const nameInput = $<HTMLInputElement>('name');
 const savedName = localStorage.getItem('name');
