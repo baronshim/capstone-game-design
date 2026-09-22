@@ -11,21 +11,22 @@ Play it: https://imposter-turing.baronshim.workers.dev
 Design spec: `docs/superpowers/specs/2026-09-04-imposter-turing-design.md`
 Plans: `docs/superpowers/plans/`
 
-## A round (as of m3)
+## A round (as of the 2026-09-17 playtest pass)
 
 1. **Lobby.** Create a room, share the 4-letter code, press Start with 1 to 6
    humans. Empty seats become bots with their own personas.
-2. **Clues.** Everyone gets an alias. One seat, human or bot, is the imposter
+2. **Deal.** 6s to read your word or role card before the first clue turn.
+3. **Clues.** Everyone gets an alias. One seat, human or bot, is the imposter
    and sees only the category; everyone else sees the word. Two passes of
-   one-word clues, 20s per turn. The word itself and repeated clues are
+   one-word clues, 30s per turn. The word itself and repeated clues are
    rejected. Bots take their turns by themselves.
-3. **Chat.** 90s of open discussion. Bots chip in one to three times each,
-   mimicking how the humans in the room write. The transcript stays on screen,
-   read-only, through the vote, the steal, and the bot call.
-4. **Vote.** 20s. Bots vote too. A majority of votes cast ejects a seat.
-5. **Steal.** An ejected imposter, human or bot, gets 15s to guess the word.
-6. **Bot call.** 20s. Every human marks every other seat Human or Bot.
-7. **Reveal.** Everyone's name, who was human and who was a bot, who was the
+4. **Chat.** 150s of open discussion. Bots chip in repeatedly, up to seven
+   lines each, mimicking how the humans in the room write. The transcript
+   stays on screen, read-only, through the vote, the steal, and the bot call.
+5. **Vote.** 30s. Bots vote too. A majority of votes cast ejects a seat.
+6. **Steal.** An ejected imposter, human or bot, gets 20s to guess the word.
+7. **Bot call.** 30s. Every human marks every other seat Human or Bot.
+8. **Reveal.** Everyone's name, who was human and who was a bot, who was the
    imposter, who voted for whom, the word, the result, and the scoreboard.
    Play again returns to the lobby.
 
@@ -49,8 +50,9 @@ are not the secret word, chat lines under 140 characters that never contain
 the word, votes for a real seat. Chat lines are also dropped when they read
 as a bot: filler such as "definitely", "sus", or "lol", emoji when no human
 has used one, or the same point an earlier line already made; each bot says
-at most three lines a round. Each bot seat is dealt a distinct persona from a
-pool of six (typing habits, mood, a hobby it must not bring up). Anything
+at most seven lines a round. Each bot seat is dealt a distinct persona from a
+pool of six (typing habits, mood, a hobby it must not bring up, three example
+lines for voice). Anything
 invalid, slow (over 5s), or over the budget of 40 calls per round falls back
 to a scripted bot: generic clues, silence in chat, a rule-based vote. If the free daily allocation runs
 out, rooms show "bots are on autopilot today" and play by script until

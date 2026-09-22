@@ -51,15 +51,20 @@ should make you feel betrayed.
 
 All phases show a visible countdown.
 
-1. **Clues, 2 passes.** In seat order, each player submits one word
-   (20s per turn). Forbidden: the secret word itself (case-insensitive,
-   plus simple plural/stem match) and any clue already given this round. A
+1. **Deal, 6s (added 2026-09-17 playtest pass).** A shared beat between
+   lobby/start and the first clue turn, so a seat can read its word or role
+   card before the clue timer starts.
+2. **Clues, 2 passes.** In seat order, each player submits one word
+   (30s per turn, up from 20s, 2026-09-17 playtest pass). Forbidden: the
+   secret word itself (case-insensitive, plus simple plural/stem match) and
+   any clue already given this round. A
    rejected clue returns an error and the timer continues. Timeout submits
    nothing, shown publicly as "(no clue)". The imposter's clue skips the
    secret-word check (decided 2026-09-15): the imposter cannot knowingly say
    the word, and rejecting it would turn the error code into a word oracle.
    An imposter who happens to say the word has simply outed themselves.
-2. **Interrogation, 90s.** Open free chat. Each player has one **question
+3. **Interrogation, 150s (up from 90s, 2026-09-17 playtest pass).** Open
+   free chat. Each player has one **question
    token** per round. Spending it posts a menu question at a target seat:
    - "Are you the imposter?"
    - "Are you a knight?"
@@ -75,15 +80,16 @@ All phases show a visible countdown.
    for everyone. Only one question may be pending at a time; others queue.
    The question menu ships in milestone 4; until then interrogation is open
    chat only and bots do not ask.
-3. **Vote, 20s.** Every seat votes for one seat (not self). Bots vote too.
+4. **Vote, 30s (up from 20s, 2026-09-17 playtest pass).** Every seat votes
+   for one seat (not self). Bots vote too.
    Majority (strictly more than half of votes cast) is ejected. Otherwise,
    including ties, nobody is ejected. Abstentions do not count as votes.
-4. **Steal.** If the imposter was ejected, they get one guess at the word
-   (15s). Exact match (case-insensitive, trimmed) flips the result to an
-   imposter win.
-5. **Bot call, 20s.** Each human marks every other seat as Human or Bot.
-   Unmarked seats count as no call.
-6. **Reveal.** For every seat: alias, human or bot, Knight or Knave,
+5. **Steal, 20s (up from 15s, 2026-09-17 playtest pass).** If the imposter
+   was ejected, they get one guess at the word. Exact match
+   (case-insensitive, trimmed) flips the result to an imposter win.
+6. **Bot call, 30s (up from 20s, 2026-09-17 playtest pass).** Each human
+   marks every other seat as Human or Bot. Unmarked seats count as no call.
+7. **Reveal.** For every seat: alias, human or bot, Knight or Knave,
    imposter or not, and the players behind the aliases (human display
    name). Shows the group result and each human's bot-call score.
 
@@ -255,6 +261,10 @@ before, who accuses loudest, who goes quiet). Personas are drawn from a small ha
 a round is reproducible from its seed. Different lenses keep five bots
 from reaching one shared verdict from the same transcript.
 
+Each persona also carries exactly three example lines (added 2026-09-17
+playtest pass), given to the model for voice only, never content, so a
+persona's phrasing shows without leaking a scripted point into the round.
+
 ### 5.2 Actions and schemas
 
 Each bot action is a single call through the `BotBackend` interface
@@ -302,20 +312,35 @@ that only agree ("yeah same", "agreed, fox") are rejected server-side.
 
 ### 5.5 Pacing
 
-During the chat each bot gets 3 to 5 scheduled chances to speak at
-jittered times; two bots open within 2 to 6 seconds and the rest spread to
-80 seconds. Each scheduled tick carries a move (open, question, disagree,
+**Revised 2026-09-17 playtest pass** (slower and chattier, to fit the longer
+phases in 2.3): a clue-turn bot now waits 6 to 16 seconds before its clue,
+up from a shorter jitter. During the chat each bot gets 5 to 8 scheduled
+chances to speak at jittered times; two bots open 8 to 18 seconds in (people
+reread the clues first) and the rest spread from 15 seconds to 140 seconds.
+Each scheduled tick carries a move (open, question, disagree,
 defend, aside, react) so bots start threads and push back rather than only
 echoing the latest line; the round's first tick is always an open. A line
 posted during the chat also owes reply ticks: a bot named by one word of
-its call sign replies to defend itself 2.5 to 7 seconds later (90%), else
-one bot may react (60% after a human line, 30% after a bot line, so
-bot-to-bot chains stay short). A bot posts at most 4 lines per round and
-never two within 8 seconds; a tick it cannot use costs no model call.
-Before posting, a chat line is delayed by a typing-time simulation of 30ms
-per character, capped at 2.5 seconds, so replies do not land instantly, and
+its call sign replies to defend itself 4 to 12 seconds later (90%), else
+one bot may react (80% after a human line, 30% after a bot line, so
+bot-to-bot chains stay short). A bot posts at most 7 lines per round
+(`MAX_BOT_LINES_PER_ROUND`) and never two within 6 seconds
+(`MIN_BOT_GAP_MS`); a tick it cannot use costs no model call.
+Before posting, a chat line is delayed by a typing-time simulation of 55ms
+per character, capped at 6 seconds, so replies do not land instantly, and
 then rechecked against the room, because turns run concurrently and another
 bot may have made the same point while this one was "typing".
+
+**Typing indicators (added 2026-09-17 playtest pass).** The client sends
+`{ type: 'typing' }` while a seat is composing; the server broadcasts
+`{ type: 'typing', seat, ms }` to the other seated sockets, throttled to
+once per 1500ms per seat, and only in a phase where that seat could be
+writing (lobby, chat, reveal, or clue on that seat's own turn). Humans
+report a flat 3 seconds. Bots announce the same window they simulate: their
+typing-time estimate for a chat line, or 2.5 seconds before a clue lands.
+The signal is ephemeral — never written into `RoomState` or a redacted
+snapshot — and both humans and bots produce it, so its presence or absence
+is not itself a bot tell.
 
 ### 5.6 Model settings
 
@@ -329,9 +354,10 @@ Default model is Gemma 4 26B (`@cf/google/gemma-4-26b-a4b-it`), about 15
 neurons per bot call at roughly 1,500 input and 40 output tokens, so around
 650 calls or 20 to 30 full rounds per day. `BOT_MODEL` overrides it. Each
 call uses the JSON schema `response_format`, `max_tokens` of 80 (120 for
-chat, which also returns a suspect and reason), and a temperature of 0.9
-for chat, 0.7 for votes so five bots do not converge on one seat, and 0.3
-for clues and steals. Gemma 4's
+chat, which also returns a suspect and reason), and a temperature of 1.0
+for chat (raised from 0.9, 2026-09-17 playtest pass, so lines vary more and
+personas show more clearly), 0.7 for votes so five bots do not converge on
+one seat, and 0.3 for clues and steals. Gemma 4's
 thinking mode is sent OFF explicitly via `chat_template_kwargs: { enable_thinking: false }`. Verified live 2026-09-16: this Workers AI Gemma 4 build defaults thinking ON, and without the flag it spends the whole 80-token budget on `reasoning_content` and returns empty `content`, so every bot call would fall back to scripted.
 A call that has not returned after 5 seconds is abandoned (the promise is
 raced against a timer; the binding has no cancel) and counts as failed.
@@ -367,6 +393,15 @@ role and the word, so the guard is structural:
 
 A failed check counts as a failed call and routes to the scripted backend.
 
+**One retry (added 2026-09-17 playtest pass).** A chat line rejected for a
+fixable reason (filler, emoji, near-duplicate, pure agreement, a leaked
+word, or length) gets one more try on the primary model before falling
+back: the rejection reason is turned into a short note (`retryNote`, e.g.
+"it only agreed with someone") and appended to the prompt, asking for a
+different line or a null reply. The retry counts against the per-round call
+budget. Any other failure, or a second rejection, routes to the scripted
+backend as before.
+
 ## 6. Client
 
 Plain TypeScript and HTML, mobile-first single column. Views:
@@ -380,6 +415,12 @@ Plain TypeScript and HTML, mobile-first single column. Views:
 - **Bot call:** seat list with Human/Bot toggles.
 - **Reveal:** table of seats with true identities and roles, group result,
   bot-call scores, Play Again.
+
+**Added 2026-09-17 playtest pass:** a phase banner and progress bar on
+every timed phase, a deal-phase countdown, a nudge on the player's own
+turn, and synthesized `AudioContext` sound cues (a chime on phase change, a
+ding on your turn, a tick in the last five seconds, a tap on new chat
+lines) behind a mute toggle persisted in `localStorage`.
 
 ## 7. Testing
 
