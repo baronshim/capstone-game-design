@@ -56,10 +56,10 @@ export function readFrom(inputs: BotInputs, raw: unknown): Read | null {
   return { suspect, reason: reason || 'gut feeling' };
 }
 
-/** Chat lines a bot may post per round; a talkative human manages about this many in 90 seconds. */
-export const MAX_BOT_LINES_PER_ROUND = 4;
-/** A bot never posts two lines closer together than this; people do not double-post half a second apart. */
-export const MIN_BOT_GAP_MS = 8000;
+/** Chat lines a bot may post per round; a talkative human manages about this many in 150 seconds. */
+export const MAX_BOT_LINES_PER_ROUND = 7;
+/** A bot never posts two lines closer together than this; people do not double-post seconds apart. */
+export const MIN_BOT_GAP_MS = 6000;
 
 /** True when the seat is still under its line cap and its last line is old enough (spec 5.5). */
 export function canSpeak(state: RoomState, seat: number, now: number): boolean {

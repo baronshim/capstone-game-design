@@ -148,7 +148,7 @@ export function botEffects(prev: RoomState, next: RoomState): BotTurn[] {
     const newTurn = prev.phase !== 'clue' || prev.round?.clueSeat !== round.clueSeat || prev.round?.cluePass !== round.cluePass;
     if (newTurn && seat.kind === 'bot') {
       const rng = seededRng(round.seed + round.cluePass * 100 + seat.index);
-      out.push({ type: 'botTurn', seat: seat.index, action: 'clue', delayMs: 1500 + Math.floor(rng() * 4500) });
+      out.push({ type: 'botTurn', seat: seat.index, action: 'clue', delayMs: 6000 + Math.floor(rng() * 10_000) });
     }
   } else if (next.phase === 'chat' && prev.phase !== 'chat') {
     out.push(...chatTicks(next));
@@ -217,7 +217,7 @@ function disconnect(state: RoomState, event: Extract<Event, { type: 'disconnect'
 /** Moves a bot may draw for a scheduled chat tick, weighted; the round's first tick is always an `open`. */
 const MOVE_POOL: BotMove[] = ['open', 'question', 'question', 'disagree', 'disagree', 'aside', 'react', 'react', 'react'];
 
-/** Chat ticks for the phase (spec 5.5): 3 to 5 per bot, two bots open within 2 to 6s, the rest spread to 80s. */
+/** Chat ticks for the phase (spec 5.5): 5 to 8 per bot, two bots open 8 to 18s in (people reread the clues first), the rest spread from 15s to 140s. */
 function chatTicks(next: RoomState): BotTurn[] {
   const round = next.round!;
   const rng = seededRng(round.seed ^ 0x5bd1e995);
@@ -228,10 +228,10 @@ function chatTicks(next: RoomState): BotTurn[] {
   }
   const out: BotTurn[] = [];
   bots.forEach((seat, order) => {
-    const ticks = 3 + Math.floor(rng() * 3);
+    const ticks = 5 + Math.floor(rng() * 4);
     const delays: number[] = [];
-    if (order < 2) delays.push(2000 + Math.floor(rng() * 4000));
-    while (delays.length < ticks) delays.push(8000 + Math.floor(rng() * 72_000));
+    if (order < 2) delays.push(8000 + Math.floor(rng() * 10_000));
+    while (delays.length < ticks) delays.push(15_000 + Math.floor(rng() * 125_000));
     delays.sort((a, b) => a - b);
     for (const delayMs of delays) {
       const move = MOVE_POOL[Math.floor(rng() * MOVE_POOL.length)];
@@ -255,8 +255,9 @@ export function namesSeat(text: string, alias: string | null): boolean {
 
 /**
  * Ticks owed to the line just posted (spec 5.5): a bot it names replies to
- * defend itself, otherwise one bot may react, more often to a human than to
- * another bot so bot-to-bot chains stay short.
+ * defend itself, otherwise one bot may react, more often to a human (80%)
+ * than to another bot (30%) so bot-to-bot chains stay short. Either way the
+ * reply lands 4 to 12s later.
  */
 function replyTicks(next: RoomState): BotTurn[] {
   const round = next.round!;
@@ -268,11 +269,11 @@ function replyTicks(next: RoomState): BotTurn[] {
   const out: BotTurn[] = [];
   const named = bots.filter((s) => namesSeat(line.text, s.alias));
   for (const s of named) {
-    if (rng() < 0.9) out.push({ type: 'botTurn', seat: s.index, action: 'chat', delayMs: 2500 + Math.floor(rng() * 4500), move: 'defend' });
+    if (rng() < 0.9) out.push({ type: 'botTurn', seat: s.index, action: 'chat', delayMs: 4000 + Math.floor(rng() * 8000), move: 'defend' });
   }
-  if (named.length === 0 && bots.length > 0 && rng() < (speaker.kind === 'human' ? 0.6 : 0.3)) {
+  if (named.length === 0 && bots.length > 0 && rng() < (speaker.kind === 'human' ? 0.8 : 0.3)) {
     const s = bots[Math.floor(rng() * bots.length)];
-    out.push({ type: 'botTurn', seat: s.index, action: 'chat', delayMs: 2500 + Math.floor(rng() * 4500), move: 'react' });
+    out.push({ type: 'botTurn', seat: s.index, action: 'chat', delayMs: 4000 + Math.floor(rng() * 8000), move: 'react' });
   }
   return out;
 }

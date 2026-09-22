@@ -626,7 +626,7 @@ describe('bots in the reducer', () => {
   const botFirst = (s: RoomState) => s.seats[0].kind === 'bot';
   const botFirstTwo = (s: RoomState) => s.seats[0].kind === 'bot' && s.seats[1].kind === 'bot';
 
-  it('a bot clue turn stays open and emits one botTurn clue effect with a 1.5 to 6s delay', () => {
+  it('a bot clue turn stays open and emits one botTurn clue effect with a 6 to 16s delay', () => {
     const r = startOne(seedFor(['Ada'], botFirst));
     expect(r.state.phase).toBe('clue');
     expect(r.state.round!.clueSeat).toBe(0);
@@ -634,8 +634,8 @@ describe('bots in the reducer', () => {
     expect(r.effects).toHaveLength(1);
     expect(r.effects[0]).toMatchObject({ type: 'botTurn', seat: 0, action: 'clue' });
     const delay = (r.effects[0] as BotTurn).delayMs;
-    expect(delay).toBeGreaterThanOrEqual(1500);
-    expect(delay).toBeLessThan(6000);
+    expect(delay).toBeGreaterThanOrEqual(6000);
+    expect(delay).toBeLessThan(16_000);
   });
 
   it('a human turn emits no bot effect', () => {
@@ -684,8 +684,8 @@ describe('bots in the reducer', () => {
     expect(r.effects).toMatchObject([{ type: 'botTurn', seat: 1, action: 'clue' }]);
   });
 
-  it('entering the chat emits 3 to 5 chat ticks per bot with moves, two openers within 6s, none past 80s, and the first an open', () => {
-    let r: Result = { state: dealt(['Ada', 'Bob']), effects: [] };
+  it('entering the chat emits 5 to 8 chat ticks per bot with moves, two openers within 18s, none past 140s, and the first an open', () => {
+    let r: Result = { state: dealt(['Ada', 'Bob'], 1), effects: [] };
     while (r.state.phase === 'clue') r = apply(r.state, { type: 'timeout', at: 2000 });
     expect(r.state.phase).toBe('chat');
     const ticks = r.effects.filter((e): e is BotTurn => e.type === 'botTurn');
@@ -696,23 +696,24 @@ describe('bots in the reducer', () => {
       if (seat.kind === 'human') {
         expect(mine).toHaveLength(0);
       } else {
-        expect(mine.length).toBeGreaterThanOrEqual(3);
-        expect(mine.length).toBeLessThanOrEqual(5);
+        expect(mine.length).toBeGreaterThanOrEqual(5);
+        expect(mine.length).toBeLessThanOrEqual(8);
         for (const t of mine) {
-          expect(t.delayMs).toBeGreaterThanOrEqual(2000);
-          expect(t.delayMs).toBeLessThan(80_000);
+          expect(t.delayMs).toBeGreaterThanOrEqual(8000);
+          expect(t.delayMs).toBeLessThan(140_000);
         }
       }
     }
-    const early = ticks.filter((t) => t.delayMs < 6000);
+    const early = ticks.filter((t) => t.delayMs < 18_000);
     expect(new Set(early.map((t) => t.seat)).size).toBe(2);
+    expect(ticks.some((t) => t.delayMs < 8000)).toBe(false);
     const first = ticks.reduce((a, b) => (b.delayMs < a.delayMs ? b : a));
     expect(first.move).toBe('open');
     const moves = new Set(ticks.map((t) => t.move));
     expect(moves.size).toBeGreaterThan(1);
   });
 
-  it('a line posted during the chat can owe one reply tick, 2.5 to 7s later, never to the speaker', () => {
+  it('a line posted during the chat can owe one reply tick, 4 to 12s later, never to the speaker', () => {
     let seen = 0;
     let total = 0;
     for (let seed = 1; seed <= 30; seed++) {
@@ -728,8 +729,8 @@ describe('bots in the reducer', () => {
         expect(t).toMatchObject({ action: 'chat', move: 'react' });
         expect(t.seat).not.toBe(human.index);
         expect(r.state.seats[t.seat].kind).toBe('bot');
-        expect(t.delayMs).toBeGreaterThanOrEqual(2500);
-        expect(t.delayMs).toBeLessThan(7000);
+        expect(t.delayMs).toBeGreaterThanOrEqual(4000);
+        expect(t.delayMs).toBeLessThan(12_000);
       }
     }
     expect(seen).toBeGreaterThan(total * 0.3);

@@ -145,21 +145,21 @@ describe('validateOutput', () => {
     });
   });
 
-  it('lets a bot use emoji once a human has, and silences a bot after its fourth line or within 8s of its last', () => {
+  it('lets a bot use emoji once a human has, and silences a bot after its seventh line or within 6s of its last', () => {
     let s = inChat();
     const bot = s.seats.find((x) => x.kind === 'bot')!;
     s = apply(s, { type: 'chat', playerId: 'p0', text: 'ok 😀', at: 5 }).state;
     let inputs = buildInputs(s, turn(bot.index, 'chat'));
     expect(validateOutput(s, inputs, { say: 'hm 🤔' }, 9)).toMatchObject({ ok: true });
-    for (let i = 0; i < 3; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 10_000 * (i + 1) }).state;
+    for (let i = 0; i < 6; i++) s = apply(s, { type: 'botChat', seat: bot.index, text: `line ${i}`, at: 10_000 * (i + 1) }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
-    expect(canSpeak(s, bot.index, 30_500)).toBe(false);
-    expect(validateOutput(s, inputs, { say: 'too soon' }, 30_500)).toEqual({ ok: true, event: null });
-    expect(canSpeak(s, bot.index, 38_000)).toBe(true);
-    expect(validateOutput(s, inputs, { say: 'still fine' }, 38_000)).toMatchObject({ ok: true, event: { text: 'still fine' } });
-    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 3', at: 38_000 }).state;
+    expect(canSpeak(s, bot.index, 65_999)).toBe(false);
+    expect(validateOutput(s, inputs, { say: 'too soon' }, 65_999)).toEqual({ ok: true, event: null });
+    expect(canSpeak(s, bot.index, 66_000)).toBe(true);
+    expect(validateOutput(s, inputs, { say: 'still fine' }, 66_000)).toMatchObject({ ok: true, event: { text: 'still fine' } });
+    s = apply(s, { type: 'botChat', seat: bot.index, text: 'line 6', at: 66_000 }).state;
     inputs = buildInputs(s, turn(bot.index, 'chat'));
-    expect(validateOutput(s, inputs, { say: 'one more thing' }, 60_000)).toEqual({ ok: true, event: null });
+    expect(validateOutput(s, inputs, { say: 'one more thing' }, 100_000)).toEqual({ ok: true, event: null });
   });
 
   it('recheckChat drops a line another seat has since said, or one the bot cannot post anymore', () => {
