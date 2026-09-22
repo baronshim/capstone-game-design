@@ -9,6 +9,7 @@ import {
   type BotContext,
   type BotInputs,
 } from '../../src/worker/prompts';
+import { FILLER } from '../../src/worker/bots';
 
 function ctx(over: Partial<BotContext> = {}): BotContext {
   return {
@@ -25,6 +26,10 @@ function ctx(over: Partial<BotContext> = {}): BotContext {
     read: null,
     ...over,
   };
+}
+
+function chatInputs(over: Partial<BotContext> = {}): BotInputs {
+  return { action: 'chat', ...ctx(over) };
 }
 
 const all = (m: { system: string; user: string }) => `${m.system}\n${m.user}`;
@@ -54,6 +59,17 @@ describe('personaFor', () => {
     for (const p of PERSONAS) {
       expect(p.voice.toLowerCase()).not.toContain('emoji');
       expect(p.voice.toLowerCase()).not.toContain('lol');
+    }
+  });
+
+  it('gives every persona three example lines in its voice, none of them filler or emoji', () => {
+    for (const p of PERSONAS) {
+      expect(p.examples).toHaveLength(3);
+      for (const line of p.examples) {
+        expect(line.length).toBeLessThanOrEqual(MAX_BOT_LINE);
+        expect(FILLER.test(line)).toBe(false);
+        expect(/\p{Extended_Pictographic}/u.test(line)).toBe(false);
+      }
     }
   });
 });
@@ -145,7 +161,7 @@ describe('buildMessages', () => {
     });
     expect(m.user).toMatch(/you have already said/i);
     expect(m.user).toContain('round is fine imo');
-    expect(m.user).toMatch(/nothing new/i);
+    expect(m.user).toMatch(/truly have nothing/i);
   });
 
   it('asks chat for a suspect and reason alongside the line, and states the move', () => {
@@ -188,6 +204,19 @@ describe('buildMessages', () => {
     expect(m.user).toContain('Food');
     expect(m.user).toContain('cheese');
     expect(m.user).toContain('"word"');
+  });
+
+  it('shows the persona\'s example lines in the system prompt and pushes for opinions, not silence', () => {
+    const m = buildMessages(chatInputs());
+    for (const line of chatInputs().persona.examples) expect(m.system).toContain(line);
+    expect(m.system).toContain('quiet players look like bots');
+    expect(m.system).not.toContain('It is normal to say nothing');
+  });
+
+  it('appends the retry note to the chat prompt when a line was rejected', () => {
+    const m = buildMessages({ ...chatInputs(), retry: 'Your last line was rejected because it only agreed with someone.' });
+    expect(m.user).toContain('rejected because it only agreed');
+    expect(buildMessages(chatInputs()).user).not.toContain('rejected');
   });
 
   it('never carries player identities', () => {

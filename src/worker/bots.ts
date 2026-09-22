@@ -87,7 +87,7 @@ export function recheckChat(state: RoomState, turn: BotTurn, text: string, now: 
 const AGREE = /^(yeah|yep|yea|ya|yup|same|agreed?|true|exactly|right|this|facts|i agree|i think so too|good point|fair)\b/i;
 
 /** Model-speak that reads as a bot in this game's chat (seen live 2026-09-16). Matched as whole words, case-insensitive. */
-const FILLER = /\b(definitely|sus|vibes|for real|honestly|tbh|lol|haha|let'?s go+|hyped?|ready to (win|play|go))\b/i;
+export const FILLER = /\b(definitely|sus|vibes|for real|honestly|tbh|lol|haha|let'?s go+|hyped?|ready to (win|play|go))\b/i;
 
 const EMOJI = /\p{Extended_Pictographic}/u;
 
@@ -173,6 +173,20 @@ export function validateOutput(state: RoomState, inputs: BotInputs, raw: unknown
   }
 }
 
+/** What to tell the model when its chat line was rejected, or null when the failure is not one a rewrite would fix. */
+export function retryNote(reason: string): string | null {
+  const why: Record<string, string> = {
+    'say-filler': 'it leaned on filler words',
+    'say-emoji': 'it used an emoji and nobody here does',
+    'say-duplicate': 'it made a point someone already made',
+    'say-agree': 'it only agreed with someone',
+    'say-leaks-word': 'it contained the secret word',
+    'say-too-long': 'it was too long',
+  };
+  const w = why[reason];
+  return w ? `Your last line was rejected because ${w}. Write a different line, or reply null.` : null;
+}
+
 export interface RunnerOptions {
   /** Primary-backend calls allowed per round (spec 4.5). */
   budgetPerRound: number;
@@ -224,16 +238,24 @@ export class BotRunner {
     if (turn.action === 'chat' && !canSpeak(state, turn.seat, this.opts.now())) return null;
     const inputs = buildInputs(state, turn, this.reads.get(turn.seat) ?? null);
     if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < this.opts.budgetPerRound) {
-      this.primaryCalls++;
-      const result = await this.callPrimary(inputs);
-      if (result.ok) {
-        const read = readFrom(inputs, result.raw);
+      let attempt = inputs;
+      for (let tries = 0; tries < 2 && this.primaryCalls < this.opts.budgetPerRound; tries++) {
+        this.primaryCalls++;
+        const result = await this.callPrimary(attempt);
+        if (!result.ok) {
+          this.opts.onFallback?.(inputs.action, result.reason);
+          break;
+        }
+        const read = readFrom(attempt, result.raw);
         if (read) this.reads.set(turn.seat, read);
-        const v = validateOutput(state, inputs, result.raw, this.opts.now());
+        const v = validateOutput(state, attempt, result.raw, this.opts.now());
         if (v.ok) return v.event;
-        this.opts.onFallback?.(inputs.action, v.reason);
-      } else {
-        this.opts.onFallback?.(inputs.action, result.reason);
+        const note = attempt.action === 'chat' && tries === 0 ? retryNote(v.reason) : null;
+        if (!note) {
+          this.opts.onFallback?.(inputs.action, v.reason);
+          break;
+        }
+        attempt = { ...attempt, retry: note };
       }
     }
     const raw = await this.fallback.run(inputs).catch(() => null);

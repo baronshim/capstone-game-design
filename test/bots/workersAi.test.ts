@@ -67,7 +67,7 @@ describe('WorkersAiBackend', () => {
     expect(messages[0].content).toContain('Imposter Turing');
     expect(messages[1].content).toContain('cheese');
     await backend.run(inputs('chat'));
-    expect(ai.calls[1].inputs.temperature).toBe(0.9);
+    expect(ai.calls[1].inputs.temperature).toBe(1.0);
     expect(ai.calls[1].inputs.max_tokens).toBe(MAX_CHAT_OUTPUT_TOKENS);
     expect(ai.calls[1].inputs.response_format).toEqual({ type: 'json_schema', json_schema: schemaFor('chat') });
     await backend.run(inputs('vote'));

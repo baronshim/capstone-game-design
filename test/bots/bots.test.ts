@@ -11,6 +11,7 @@ import {
   nextUtcMidnight,
   pureAgreement,
   readFrom,
+  retryNote,
   validateOutput,
   type BotBackend,
 } from '../../src/worker/bots';
@@ -376,6 +377,43 @@ describe('BotRunner', () => {
     const r = runner(stub({ say: 'yeah same', suspect: other.index, reason: 'copycat' }), new ScriptedBackend());
     expect(await r.turn(s, turn(bot.index, 'chat'))).toBeNull();
     expect(r.readOf(bot.index)).toEqual({ suspect: other.index, reason: 'copycat' });
+  });
+
+  it('retries the primary once with the rejection reason when a chat line fails the style check, then falls back', async () => {
+    const seen: BotInputs[] = [];
+    const primary: BotBackend = {
+      run: async (inputs) => {
+        seen.push(inputs);
+        return seen.length === 1 ? { say: 'yeah same', suspect: 1, reason: 'x' } : { say: 'fox your second clue was a stretch', suspect: 1, reason: 'x' };
+      },
+    };
+    const fallback = stub({ say: null });
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    const event = await runner(primary, fallback).turn(s, turn(bot.index, 'chat', 'react'));
+    expect(event).toMatchObject({ type: 'botChat', text: 'fox your second clue was a stretch' });
+    expect(seen).toHaveLength(2);
+    expect(seen[1].retry).toMatch(/only agreed/);
+    expect(fallback.calls).toBe(0);
+  });
+
+  it('gives up after one retry and falls back', async () => {
+    const primary = stub({ say: 'yeah same', suspect: 1, reason: 'x' });
+    const fallback = stub({ say: null });
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    expect(await runner(primary, fallback).turn(s, turn(bot.index, 'chat'))).toBeNull();
+    expect(primary.calls).toBe(2);
+    expect(fallback.calls).toBe(1);
+  });
+
+  it('retryNote knows the chat rejections and nothing else', () => {
+    expect(retryNote('say-agree')).toMatch(/only agreed/);
+    expect(retryNote('say-filler')).toMatch(/filler/);
+    expect(retryNote('say-duplicate')).toMatch(/already/);
+    expect(retryNote('say-leaks-word')).toMatch(/secret word/);
+    expect(retryNote('clue-missing')).toBeNull();
+    expect(retryNote('bot-timeout')).toBeNull();
   });
 
   it('stops calling the primary after the per-round budget and resets on a new round', async () => {

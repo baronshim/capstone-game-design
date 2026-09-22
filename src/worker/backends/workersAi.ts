@@ -7,11 +7,11 @@ export const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 export const MAX_OUTPUT_TOKENS = 80;
 export const MAX_CHAT_OUTPUT_TOKENS = 120;
 
-/** Chat runs hot so lines vary; votes warm so five bots do not converge on one seat; clues and steals cool (spec 5.6). */
+/** Chat runs hot so lines vary and personas show; votes warm so five bots do not converge on one seat; clues and steals cool (spec 5.6). */
 export function temperatureFor(action: BotInputs['action']): number {
   switch (action) {
     case 'chat':
-      return 0.9;
+      return 1.0;
     case 'vote':
       return 0.7;
     default:
