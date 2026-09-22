@@ -188,7 +188,7 @@ export function retryNote(reason: string): string | null {
 }
 
 export interface RunnerOptions {
-  /** Primary-backend calls allowed per round (spec 4.5). */
+  /** Primary-backend calls allowed per round; chat turns stop one seat's worth short of it (spec 4.5). */
   budgetPerRound: number;
   /** Milliseconds before a primary call is abandoned (spec 4.5). */
   timeoutMs: number;
@@ -200,7 +200,7 @@ export interface RunnerOptions {
   onFallback?: (action: string, reason: string) => void;
 }
 
-export const DEFAULT_BUDGET = 60;
+export const DEFAULT_BUDGET = 100;
 export const DEFAULT_TIMEOUT_MS = 5000;
 
 /** Runs bot turns: primary backend first, scripted fallback on any failure, per-round budget, daily autopilot. */
@@ -237,9 +237,10 @@ export class BotRunner {
     // A bot that cannot post anyway does not spend a model call.
     if (turn.action === 'chat' && !canSpeak(state, turn.seat, this.opts.now())) return null;
     const inputs = buildInputs(state, turn, this.reads.get(turn.seat) ?? null);
-    if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < this.opts.budgetPerRound) {
+    const cap = this.capFor(state, turn);
+    if (this.primary !== this.fallback && !this.autopilot && this.primaryCalls < cap) {
       let attempt = inputs;
-      for (let tries = 0; tries < 2 && this.primaryCalls < this.opts.budgetPerRound; tries++) {
+      for (let tries = 0; tries < 2 && this.primaryCalls < cap; tries++) {
         this.primaryCalls++;
         const result = await this.callPrimary(attempt);
         if (!result.ok) {
@@ -261,6 +262,18 @@ export class BotRunner {
     const raw = await this.fallback.run(inputs).catch(() => null);
     const v = validateOutput(state, inputs, raw, this.opts.now());
     return v.ok ? v.event : null;
+  }
+
+  /**
+   * How many primary calls this turn may have spent by the time it runs. Chat
+   * and reply ticks stop one seat's worth of calls short of the budget: they
+   * are scheduled first and in bulk, and the vote, steal and bot-call turns
+   * come last, so without the reserve chat would eat the budget and every bot
+   * would fall back to the deterministic rule vote (spec 4.5).
+   */
+  private capFor(state: RoomState, turn: BotTurn): number {
+    const reserve = turn.action === 'chat' ? state.seats.length : 0;
+    return Math.max(0, this.opts.budgetPerRound - reserve);
   }
 
   private async callPrimary(inputs: BotInputs): Promise<{ ok: true; raw: unknown } | { ok: false; reason: string }> {

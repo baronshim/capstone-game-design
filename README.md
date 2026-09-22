@@ -53,7 +53,8 @@ has used one, or the same point an earlier line already made; each bot says
 at most seven lines a round. Each bot seat is dealt a distinct persona from a
 pool of six (typing habits, mood, a hobby it must not bring up, three example
 lines for voice). Anything
-invalid, slow (over 5s), or over the budget of 40 calls per round falls back
+invalid, slow (over 5s), or over the budget of 100 calls per round (of which the
+last six are reserved for the vote, steal and bot-call turns) falls back
 to a scripted bot: generic clues, silence in chat, a rule-based vote. If the free daily allocation runs
 out, rooms show "bots are on autopilot today" and play by script until
 midnight UTC.

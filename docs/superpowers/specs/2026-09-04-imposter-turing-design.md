@@ -244,10 +244,15 @@ Durable Object (see section 3); question-answer deadlines (m4) use the alarm.
 - Start with 0 humans: refused.
 - Room creation is limited to 5 rooms per minute per client IP, counted in
   Worker memory (best effort, resets when the isolate restarts).
-- Per-room budget of 60 live API calls per round (raised from 40 on
-  2026-09-16 when chat ticks and reply ticks were added). Over budget, bots go
-  silent in chat and use rule-based votes (vote for the seat with the most
-  accusations against it, else random non-self).
+- Per-room budget of 100 live API calls per round (40 until 2026-09-16, 60
+  until 2026-09-17, raised as chat ticks, reply ticks and the retry were
+  added). Chat and reply ticks may not spend the last `seats.length` (6) calls
+  of that budget; clue, vote and steal turns may. Chat turns are scheduled
+  first and in bulk while vote turns are scheduled last, so without the
+  reserve the vote would be the first thing to fall off the budget and every
+  bot would vote by rule together. Over budget, bots go silent in chat and use
+  rule-based votes (vote for the seat with the most accusations against it,
+  else random non-self).
 
 ## 5. Bots
 
@@ -352,7 +357,8 @@ over.
 
 Default model is Gemma 4 26B (`@cf/google/gemma-4-26b-a4b-it`), about 15
 neurons per bot call at roughly 1,500 input and 40 output tokens, so around
-650 calls or 20 to 30 full rounds per day. `BOT_MODEL` overrides it. Each
+650 calls, which at the 70 to 90 calls a six-seat round now spends is about 7
+to 9 full rounds per day. `BOT_MODEL` overrides it. Each
 call uses the JSON schema `response_format`, `max_tokens` of 80 (120 for
 chat, which also returns a suspect and reason), and a temperature of 1.0
 for chat (raised from 0.9, 2026-09-17 playtest pass, so lines vary more and

@@ -429,6 +429,28 @@ describe('BotRunner', () => {
     expect(primary.calls).toBe(3);
   });
 
+  it('keeps the last seats.length calls of the budget for non-chat turns', async () => {
+    const chatting = inChat();
+    const bots = chatting.seats.filter((x) => x.kind === 'bot');
+    const other = (bots[0].index + 1) % 6;
+    // One reply serves both actions; the runner only reads the field its action validates.
+    const primary = stub({ say: 'that second clue was a stretch', vote: other, suspect: other, reason: 'x' });
+    const fallback = stub({ say: null, vote: other });
+    // Six seats, so chat may spend two of these eight calls and the other six are held back.
+    const r = runner(primary, fallback, { budgetPerRound: 8 });
+    expect(await r.turn(chatting, turn(bots[0].index, 'chat'))).toMatchObject({ type: 'botChat' });
+    expect(await r.turn(chatting, turn(bots[1].index, 'chat'))).toMatchObject({ type: 'botChat' });
+    expect(await r.turn(chatting, turn(bots[2].index, 'chat'))).toBeNull();
+    expect(primary.calls).toBe(2);
+    expect(fallback.calls).toBe(1);
+
+    // Same round, so the count carries over; the vote still reaches the model instead of voting by rule.
+    const voting = apply(chatting, { type: 'timeout', at: 200_000 }).state;
+    expect(voting.round!.seed).toBe(chatting.round!.seed);
+    expect(await r.turn(voting, turn(bots[0].index, 'vote'))).toMatchObject({ type: 'botVote', target: other });
+    expect(primary.calls).toBe(3);
+  });
+
   it('switches to autopilot until the next UTC midnight on a quota error', async () => {
     const now = Date.UTC(2026, 8, 15, 13, 0, 0);
     const primary = stub(() => Promise.reject(new Error('3040: Daily quota exceeded (neurons)')));
