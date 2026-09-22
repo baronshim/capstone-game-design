@@ -241,10 +241,12 @@ export class RoomObject extends DurableObject<Env> {
       const event = await this.runner.turn(this.state, turn);
       if (!event) return;
       if (event.type === 'botClue') {
+        // The round may have moved on while the model was thinking; the reducer also guards the pass and the turn.
+        // A chip for a seat whose turn has passed is a bot tell, so the check comes before the broadcast.
+        if (!this.stillClueing(seed, turn.seat)) return;
         this.broadcastTyping(turn.seat, CLUE_TYPING_MS);
         if (!this.instant) await new Promise((r) => setTimeout(r, CLUE_TYPING_MS));
-        // The round may have ended while the clue was "being typed"; the reducer also guards the pass and the turn.
-        if (!this.state?.round || this.state.round.seed !== seed) return;
+        if (!this.stillClueing(seed, turn.seat)) return;
         await this.dispatch({ ...event, at: Date.now() });
         return;
       }
@@ -252,6 +254,10 @@ export class RoomObject extends DurableObject<Env> {
         await this.dispatch(event);
         return;
       }
+      // Chat ticks are drawn across the whole chat phase and the model call sits on top of that, so a
+      // late one can land after the vote has opened. Humans cannot ping outside chat, so a chip then
+      // is a bot tell: drop the turn before anything is broadcast or posted.
+      if (this.state?.phase !== 'chat' || this.state.round?.seed !== seed) return;
       const typingMs = Math.min(MAX_TYPING_MS, TYPING_MS_PER_CHAR * event.text.length);
       this.broadcastTyping(turn.seat, typingMs);
       if (!this.instant) await new Promise((r) => setTimeout(r, typingMs));
@@ -261,6 +267,12 @@ export class RoomObject extends DurableObject<Env> {
     } catch (err) {
       console.warn(`bot ${turn.action} for seat ${turn.seat} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** True while the room is still waiting on this seat's clue in the round the turn was scheduled for. */
+  private stillClueing(seed: number, seat: number): boolean {
+    const round = this.state?.round;
+    return this.state?.phase === 'clue' && round?.seed === seed && round.clueSeat === seat;
   }
 
   /** Mirrors the reducer's deadline into the DO alarm, or arms the deletion TTL when idle and empty. */
