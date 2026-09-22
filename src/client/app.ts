@@ -53,7 +53,7 @@ function banner(title: string, sub: string, mine = false, belowCard = false): vo
   $('banner-title').textContent = title;
   $('banner-sub').textContent = sub;
   el.classList.toggle('mine', mine);
-  el.classList.toggle('deal', belowCard);
+  el.classList.toggle('below', belowCard);
   el.classList.add('show');
   if (bannerTimer !== null) clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => el.classList.remove('show'), 2600);
