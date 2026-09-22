@@ -235,6 +235,32 @@
     .timer.out { color: var(--bad); }
     .timer:empty { display: none; }
 
+    .progress { height: 3px; margin: -10px 4px 14px; background: var(--line-soft); border-radius: 2px; overflow: hidden; }
+    .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+    .progress i.low { background: var(--warn); }
+    .progress i.out { background: var(--bad); }
+    #mute.off { color: var(--faint); text-decoration: line-through; }
+    .deal {
+      text-align: center; color: var(--muted); font-size: 15px; margin: -4px 0 14px;
+    }
+    .banner {
+      position: fixed; left: 50%; top: 18%; transform: translate(-50%, -12px);
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 14px 22px; border-radius: var(--radius);
+      background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 18px 40px -16px rgba(0,0,0,.9);
+      opacity: 0; pointer-events: none; z-index: 20; transition: opacity .25s ease, transform .25s ease;
+      max-width: calc(100% - 32px);
+    }
+    .banner.show { opacity: 1; transform: translate(-50%, 0); }
+    .banner b { font-family: var(--display); font-size: 22px; letter-spacing: .02em; color: var(--ink); }
+    .banner span { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+    .banner.mine { background: var(--accent); border-color: transparent; }
+    .banner.mine b { color: var(--accent-ink); }
+    .banner.mine span { color: var(--accent-ink); opacity: .8; }
+    #turn.mine { animation: nudge .6s ease-out 1; }
+    @keyframes nudge { 0% { transform: scale(.97); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
+    .seat.turn .alias::after { content: " · on turn"; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+
     .notice {
       font-size: 14px;
       color: var(--warn);
@@ -528,12 +554,15 @@
         </div>
         <span id="phase" class="phase-pill"></span>
         <span id="timer" class="timer"></span>
+        <button id="mute" class="icon-btn" title="Sound" aria-label="Toggle sound">♪</button>
         <button id="help-room" class="icon-btn" title="How to play" aria-label="How to play">?</button>
       </div>
+      <div class="progress" aria-hidden="true"><i id="progress"></i></div>
 
       <p id="notice" class="notice" hidden>Bots are on autopilot today — the daily AI budget is used up, so they play by script.</p>
 
       <div id="card" class="card" hidden></div>
+      <p id="deal" class="deal" hidden></p>
 
       <div id="seats"></div>
 
@@ -582,11 +611,12 @@
       <p class="sub">Six seats. One never learned the word. Some are machines.</p>
       <ol>
         <li><b>Lobby.</b> Share the room code. Any seat nobody takes is filled by an AI player pretending to be human.</li>
-        <li><b>Clues.</b> Everyone gets a call sign and the secret word. The imposter only sees the category. Two rounds of one-word clues, 20 seconds each. Hint at the word without giving it away.</li>
-        <li><b>Chat.</b> 90 seconds to argue. Whose clues were vague? Who sounds like a machine?</li>
-        <li><b>Vote.</b> 20 seconds. A majority ejects one seat. You can change your pick until time runs out.</li>
-        <li><b>Steal.</b> If the ejected seat is the imposter, they get 15 seconds to guess the word and win anyway.</li>
-        <li><b>Bot call.</b> 20 seconds to mark every other seat Human or Bot.</li>
+        <li><b>Deal.</b> Six seconds to read your card before the first clue turn.</li>
+        <li><b>Clues.</b> Everyone gets a call sign and the secret word. The imposter only sees the category. Two rounds of one-word clues, 30 seconds each. Hint at the word without giving it away.</li>
+        <li><b>Chat.</b> 150 seconds to argue. Whose clues were vague? Who sounds like a machine?</li>
+        <li><b>Vote.</b> 30 seconds. A majority ejects one seat. You can change your pick until time runs out.</li>
+        <li><b>Steal.</b> If the ejected seat is the imposter, they get 20 seconds to guess the word and win anyway.</li>
+        <li><b>Bot call.</b> 30 seconds to mark every other seat Human or Bot.</li>
         <li><b>Reveal.</b> Names, bots, the imposter, the votes, the word, and the scores.</li>
       </ol>
       <p class="tip"><b>Scoring.</b> Vote for the imposter: 2 points. Imposter survives the vote: 3 points. Imposter is ejected but steals the word: 2 points. Each correct Human or Bot call: 1 point. The highest total wins the round, bots included. Play again keeps your total.</p>
@@ -594,6 +624,8 @@
     </dialog>
 
     <footer><span class="footnote">imposter turing · signal or noise?</span></footer>
+
+  <div id="banner" class="banner" aria-live="polite"><b id="banner-title"></b><span id="banner-sub"></span></div>
   </main>
   <script type="module" src="/app.js"></script>
 </body>

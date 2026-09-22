@@ -44,6 +44,26 @@ export const PHASE_LABELS: Record<Phase, string> = {
   reveal: 'reveal',
 };
 
+/** What the transition banner says as each phase opens. */
+export const BANNERS: Record<Phase, { title: string; sub: string }> = {
+  lobby: { title: 'Back in the lobby', sub: 'Play again when ready' },
+  deal: { title: 'Round starting', sub: 'Read your card' },
+  clue: { title: 'Clues', sub: 'One word each, two rounds' },
+  chat: { title: 'Chat is open', sub: 'Who never learned the word?' },
+  vote: { title: 'Vote', sub: 'A majority ejects one seat' },
+  steal: { title: 'Steal', sub: 'The imposter gets one guess' },
+  botcall: { title: 'Bot call', sub: 'Human or machine?' },
+  reveal: { title: 'Reveal', sub: 'Names, bots, the word' },
+};
+
+/** Copy under the card during the deal. */
+export function dealHtml(snap: Snapshot): string {
+  if (snap.phase !== 'deal' || !snap.round) return '';
+  return snap.round.word === null
+    ? 'Memorise the category. Clues start when the timer runs out.'
+    : 'Memorise the word. Clues start when the timer runs out.';
+}
+
 /** Human/Bot toggles for every other seat. Shows the viewer's unsent `pending` picks until the server echoes locked-in calls. */
 export function botcallHtml(snap: Snapshot, pending: BotCall[]): string {
   const me = snap.you;

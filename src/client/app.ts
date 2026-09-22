@@ -1,5 +1,7 @@
 import type { BotCall, ClientMessage, Phase, ServerMessage, Snapshot } from '../game/protocol';
-import { botcallHtml, cardHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, typingHtml, verdictHtml, voteHtml } from './views';
+import { DURATIONS } from '../game/rules';
+import { chime, ding, isMuted, setMuted, tap, tickSound, unlock } from './sound';
+import { BANNERS, botcallHtml, cardHtml, dealHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, typingHtml, verdictHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -33,6 +35,25 @@ const lastLineBySeat = new Map<number, number>();
 /** The last typing ping this client sent, so it pings no faster than the room relays. */
 let lastPing = 0;
 const TYPING_PING_MS = 1500;
+/** Whether the clue turn was the viewer's at the last render, so the nudge fires once per turn. */
+let lastTurnMine = false;
+/** Transcript length at the last render, to sound a tap only on lines that are new. */
+let lastLineCount = 0;
+/** The last whole second a tick sounded, so each of the final five seconds ticks once. */
+let lastTickSecond = -1;
+/** Timer that takes the transition banner back down. */
+let bannerTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Shows the transition banner for a couple of seconds. `mine` paints it as the viewer's own cue. */
+function banner(title: string, sub: string, mine = false): void {
+  const el = $('banner');
+  $('banner-title').textContent = title;
+  $('banner-sub').textContent = sub;
+  el.classList.toggle('mine', mine);
+  el.classList.add('show');
+  if (bannerTimer !== null) clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
 
 function showError(message: string): void {
   $('error').textContent = message;
@@ -112,6 +133,13 @@ function leave(): void {
   }
   snapshot = null;
   lastPhase = null;
+  lastTurnMine = false;
+  lastLineCount = 0;
+  if (bannerTimer !== null) {
+    clearTimeout(bannerTimer);
+    bannerTimer = null;
+  }
+  $('banner').classList.remove('show');
   typing.clear();
   lastLineBySeat.clear();
   roomCode = '';
@@ -164,8 +192,27 @@ function render(): void {
     pendingCalls = snap.seats.map(() => null);
     myVote = null;
     typing.clear();
+    // Not on the first snapshot after joining: that one is the room as found, not a transition.
+    if (lastPhase !== null) {
+      banner(BANNERS[ph].title, BANNERS[ph].sub);
+      chime();
+    }
+    lastTurnMine = false;
+    lastLineCount = 0;
     lastPhase = ph;
   }
+  if (myTurn && !lastTurnMine) {
+    banner('Your turn', `Round ${snap.round!.cluePass} of 2 · one word`, true);
+    ding();
+  }
+  lastTurnMine = myTurn;
+  // A tap for lines somebody else just posted, never for the transcript as first loaded.
+  const lines = snap.transcript.length;
+  if (lines > lastLineCount && lastLineCount > 0 && ph === 'chat') {
+    const last = snap.transcript[lines - 1];
+    if (last.seat !== snap.you) tap();
+  }
+  lastLineCount = lines;
   const typingNow = new Set([...typing].filter(([, until]) => until > Date.now()).map(([seat]) => seat));
 
   $('home').hidden = true;
@@ -176,6 +223,8 @@ function render(): void {
 
   show('card', snap.round !== null && ph !== 'lobby');
   $('card').innerHTML = cardHtml(snap);
+  show('deal', ph === 'deal');
+  $('deal').innerHTML = dealHtml(snap);
   $('seats').innerHTML = seatsHtml(snap, typingNow);
   $('seats').classList.toggle('compact', ph === 'chat');
   show('start', ph === 'lobby' && seated);
@@ -226,26 +275,48 @@ function tick(): void {
   if (pruneTyping()) render();
   const end = snapshot?.phaseEndsAt ?? null;
   const timer = $('timer');
+  const bar = $('progress');
   if (end === null) {
     timer.textContent = '';
     timer.className = 'timer';
+    bar.style.width = '0';
+    bar.className = '';
     return;
   }
   const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
   timer.textContent = `${left}s`;
   timer.className = `timer${left === 0 ? ' out' : left <= 5 ? ' low' : ''}`;
+  // The bar drains over the phase's full length; `clue` is timed per turn.
+  const key = snapshot!.phase === 'clue' ? 'clueTurn' : snapshot!.phase;
+  const total = (DURATIONS as Record<string, number>)[key] ?? 0;
+  const remaining = Math.max(0, end - Date.now());
+  bar.style.width = total ? `${(100 * remaining) / total}%` : '0';
+  bar.className = left === 0 ? 'out' : left <= 5 ? 'low' : '';
+  if (left <= 5 && left > 0 && left !== lastTickSecond) tickSound();
+  lastTickSecond = left;
 }
 setInterval(tick, 250);
 
 $('create').onclick = async () => {
+  unlock();
   const res = await fetch('/rooms', { method: 'POST' });
   const { code } = (await res.json()) as { code: string };
   connect(code);
 };
 
-$('join').onclick = () => connect($<HTMLInputElement>('code').value);
-$('start').onclick = () => send({ type: 'start' });
-$('again').onclick = () => send({ type: 'again' });
+$('join').onclick = () => {
+  unlock();
+  connect($<HTMLInputElement>('code').value);
+};
+// A player who rejoined from a shared link never clicked Create or Join, so this is their first gesture.
+$('start').onclick = () => {
+  unlock();
+  send({ type: 'start' });
+};
+$('again').onclick = () => {
+  unlock();
+  send({ type: 'again' });
+};
 $('leave').onclick = leave;
 
 const help = $<HTMLDialogElement>('help');
@@ -308,13 +379,27 @@ $('botcall').onclick = (e) => {
 
 $('lock-calls').onclick = () => send({ type: 'botcall', calls: pendingCalls });
 
+const mute = $('mute');
+function paintMute(): void {
+  mute.classList.toggle('off', isMuted());
+  mute.title = isMuted() ? 'Sound off' : 'Sound on';
+}
+mute.onclick = () => {
+  setMuted(!isMuted());
+  unlock();
+  paintMute();
+};
+paintMute();
+
 const nameInput = $<HTMLInputElement>('name');
 const savedName = localStorage.getItem('name');
 if (savedName) nameInput.value = savedName;
 nameInput.addEventListener('change', () => localStorage.setItem('name', nameInput.value));
 
 $<HTMLInputElement>('code').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') connect($<HTMLInputElement>('code').value);
+  if (e.key !== 'Enter') return;
+  unlock();
+  connect($<HTMLInputElement>('code').value);
 });
 
 const roomParam = new URLSearchParams(location.search).get('room');
