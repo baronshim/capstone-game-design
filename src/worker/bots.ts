@@ -126,6 +126,19 @@ export function nearDuplicate(text: string, prior: string): boolean {
   return shared / Math.min(a.size, b.size) >= 0.75;
 }
 
+/**
+ * Lowercase with every punctuation mark dropped, the way players in this room
+ * type (playtest 2026-09-24: a full stop or a "..." read as a bot at once).
+ * Emoji pass through so the emoji rule below still gets to judge them.
+ */
+export function casual(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\s\p{Extended_Pictographic}\u200d\ufe0f]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Why a chat line would read as a bot, or null when it passes (spec 5.7 plus the live tells). */
 export function chatLineProblem(text: string, inputs: Extract<BotInputs, { action: 'chat' }>): string | null {
   if (FILLER.test(text)) return 'say-filler';
@@ -150,7 +163,7 @@ export function validateOutput(state: RoomState, inputs: BotInputs, raw: unknown
     case 'chat': {
       if (out.say === null) return { ok: true, event: null };
       if (typeof out.say !== 'string') return { ok: false, reason: 'say-missing' };
-      const text = out.say.trim();
+      const text = casual(out.say);
       if (!text) return { ok: true, event: null };
       if (!canSpeak(state, inputs.seat, at)) return { ok: true, event: null };
       if (text.length > MAX_BOT_LINE) return { ok: false, reason: 'say-too-long' };

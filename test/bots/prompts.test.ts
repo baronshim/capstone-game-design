@@ -62,6 +62,16 @@ describe('personaFor', () => {
     }
   });
 
+  it('has every persona type lowercase with no punctuation, examples included', () => {
+    for (const p of PERSONAS) {
+      expect(p.voice).not.toMatch(/capital|full stop|comma|\.\.\./);
+      for (const line of p.examples) {
+        expect(line).toBe(line.toLowerCase());
+        expect(line).not.toMatch(/[^a-z0-9 ]/);
+      }
+    }
+  });
+
   it('gives every persona three example lines in its voice, none of them filler or emoji', () => {
     for (const p of PERSONAS) {
       expect(p.examples).toHaveLength(3);
@@ -137,8 +147,14 @@ describe('buildMessages', () => {
     const quiet = buildMessages({ action: 'chat', ...ctx() });
     expect(quiet.user).toContain('Nobody has written anything yet');
     const loud = buildMessages({ action: 'chat', ...ctx({ style: styleSheet(['lol', 'ok.', 'sure']) }) });
-    expect(loud.user).toContain('100% are all lowercase');
-    expect(loud.user).toContain('33% end with punctuation');
+    expect(loud.user).toContain('about 3 characters');
+    expect(loud.user).not.toContain('punctuation');
+  });
+
+  it('tells the bot to type lowercase with no punctuation at all', () => {
+    const m = buildMessages({ action: 'chat', ...ctx() });
+    expect(m.system).toMatch(/no punctuation/i);
+    expect(m.system).toMatch(/ellips/i);
   });
 
   it('tells the bot to skip emoji unless the humans use them, and to shorten call signs', () => {

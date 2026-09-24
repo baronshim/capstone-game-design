@@ -13,6 +13,7 @@ import {
   readFrom,
   retryNote,
   validateOutput,
+  casual,
   type BotBackend,
 } from '../../src/worker/bots';
 import { FALLBACK_CLUES, ruleVote, ScriptedBackend } from '../../src/worker/backends/scripted';
@@ -124,6 +125,17 @@ describe('validateOutput', () => {
       event: { type: 'botChat', seat: bot.index, text: 'hello', at: 9 },
     });
     expect(validateOutput(s, inputs, { say: 5 }, 9)).toMatchObject({ ok: false });
+  });
+
+  it('posts every chat line lowercase with no punctuation, the way the room types', () => {
+    const s = inChat();
+    const bot = s.seats.find((x) => x.kind === 'bot')!;
+    const inputs = buildInputs(s, turn(bot.index, 'chat'));
+    expect(validateOutput(s, inputs, { say: "Hmm... Fox, I don't buy it!" }, 9)).toMatchObject({
+      ok: true,
+      event: { text: 'hmm fox i dont buy it' },
+    });
+    expect(validateOutput(s, inputs, { say: '...' }, 9)).toEqual({ ok: true, event: null });
   });
 
   it('drops chat lines that copy an earlier line, lean on filler, or use emoji when the humans do not', () => {
@@ -480,5 +492,13 @@ describe('BotRunner', () => {
     expect(isQuotaError(new Error('429 Too Many Requests'))).toBe(true);
     expect(isQuotaError(new Error('model not found'))).toBe(false);
     expect(isQuotaError('neurons limit exceeded')).toBe(true);
+  });
+});
+
+describe('casual', () => {
+  it('lowercases and drops every punctuation mark, including ellipses and apostrophes', () => {
+    expect(casual("Wait... what? That's Fox's clue!")).toBe('wait what thats foxs clue');
+    expect(casual('  two   spaces , here ')).toBe('two spaces here');
+    expect(casual('2nd clue was nothing')).toBe('2nd clue was nothing');
   });
 });

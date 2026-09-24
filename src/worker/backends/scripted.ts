@@ -4,13 +4,12 @@ import { CATEGORIES, validateClue } from '../../game/words';
 
 /** Generic clues per category for when no model is available (spec 4.5). None of these is a secret word. */
 export const FALLBACK_CLUES: Record<string, string[]> = {
-  Space: ['sky', 'dark', 'float', 'vast', 'science', 'beyond', 'gravity', 'distant'],
-  'Golden record': ['sound', 'earth', 'noise', 'loud', 'nature', 'human', 'echo', 'alive'],
-  'Rocket launch': ['blast', 'smoke', 'thrust', 'soar', 'build', 'festival', 'glue', 'hobby'],
-  'Road trip': ['travel', 'miles', 'road', 'wheels', 'rest', 'journey', 'stop', 'pack'],
-  'Places in the book': ['city', 'state', 'far', 'warm', 'crowd', 'visit', 'west', 'home'],
-  'Recording kit': ['audio', 'voice', 'press', 'listen', 'gadget', 'pocket', 'tech', 'button'],
-  Family: ['together', 'related', 'love', 'older', 'younger', 'house', 'name', 'blood'],
+  'People in the book': ['family', 'friend', 'grownup', 'kid', 'silent', 'driver', 'missing', 'older'],
+  'Carl Sagan': ['dog', 'walk', 'loyal', 'fur', 'bowl', 'sniff', 'companion', 'named'],
+  'The recordings': ['audio', 'space', 'press', 'gadget', 'pocket', 'tape', 'button', 'sound'],
+  'The rocket': ['blast', 'smoke', 'thrust', 'soar', 'build', 'sky', 'glue', 'hobby'],
+  'Where Alex goes': ['far', 'west', 'city', 'state', 'stop', 'stay', 'visit', 'home'],
+  'Sounds on the record': ['noise', 'loud', 'nature', 'human', 'echo', 'alive', 'quiet', 'world'],
 };
 
 /**

@@ -5,15 +5,19 @@ export interface Category {
   words: string[];
 }
 
-/** Every category comes from See You in the Cosmos: Alex's rocket, his golden iPod, the trip, and the family he edits out of the record. */
+/**
+ * Every category is something a reader of See You in the Cosmos would know by
+ * name: the people, the dog, the golden iPod, the rocket, the places, and the
+ * sounds on the real golden record Alex is copying. A category name never
+ * contains one of its own words, since the imposter sees the name too.
+ */
 export const CATEGORIES: Category[] = [
-  { name: 'Space', words: ['rocket', 'planet', 'comet', 'galaxy', 'orbit', 'telescope', 'satellite', 'asteroid', 'astronaut', 'nebula'] },
-  { name: 'Golden record', words: ['whale', 'thunder', 'laughter', 'heartbeat', 'footsteps', 'crickets', 'volcano', 'earthquake', 'rain', 'wind'] },
-  { name: 'Rocket launch', words: ['launch', 'countdown', 'parachute', 'engine', 'fuel', 'nosecone', 'fins', 'altitude', 'payload', 'ignition'] },
-  { name: 'Road trip', words: ['train', 'motel', 'highway', 'desert', 'ticket', 'suitcase', 'diner', 'taxi', 'tunnel', 'campsite'] },
-  { name: 'Places in the book', words: ['rockview', 'colorado', 'albuquerque', 'nevada', 'vegas', 'california', 'florida', 'canaveral', 'jersey'] },
-  { name: 'Recording kit', words: ['ipod', 'headphones', 'microphone', 'battery', 'playlist', 'speaker', 'earbuds', 'charger', 'volume', 'pause'] },
-  { name: 'Family', words: ['brother', 'sister', 'mother', 'father', 'cousin', 'grandma', 'uncle', 'aunt', 'puppy', 'roommate'] },
+  { name: 'People in the book', words: ['alex', 'ronnie', 'terra', 'zed', 'steve', 'benji', 'petroski', 'mom', 'dad'] },
+  { name: 'Carl Sagan', words: ['leash', 'bark', 'paws', 'collar', 'treats', 'tail', 'fetch', 'puppy', 'wander', 'lost'] },
+  { name: 'The recordings', words: ['ipod', 'headphones', 'aliens', 'message', 'listen', 'playlist', 'battery', 'cosmos', 'voice', 'golden'] },
+  { name: 'The rocket', words: ['voyager', 'sharf', 'launch', 'parachute', 'nosecone', 'fins', 'engine', 'countdown', 'altitude', 'festival'] },
+  { name: 'Where Alex goes', words: ['rockview', 'colorado', 'albuquerque', 'vegas', 'nevada', 'california', 'desert', 'hospital', 'motel', 'train'] },
+  { name: 'Sounds on the record', words: ['whale', 'thunder', 'laughter', 'heartbeat', 'footsteps', 'greetings', 'kiss', 'crickets', 'rain', 'earth'] },
 ];
 
 export const MAX_CLUE_LENGTH = 20;

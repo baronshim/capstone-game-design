@@ -39,7 +39,7 @@ export function setMuted(m: boolean): void {
 }
 
 /** One sine note: `freq` Hz for `ms`, with a soft attack and release. */
-function note(freq: number, ms: number, startIn = 0, gain = 0.08): void {
+function note(freq: number, ms: number, startIn = 0, gain = 0.18): void {
   if (muted || !ctx || ctx.state !== 'running') return;
   const t0 = ctx.currentTime + startIn / 1000;
   const osc = ctx.createOscillator();
@@ -62,15 +62,15 @@ export function chime(): void {
 
 /** Your turn: one bright note. */
 export function ding(): void {
-  note(988, 260, 0, 0.1);
+  note(988, 260, 0, 0.22);
 }
 
 /** Last seconds: a dry tick. */
 export function tickSound(): void {
-  note(1320, 45, 0, 0.05);
+  note(1320, 45, 0, 0.11);
 }
 
 /** New line in the chat: a soft tap. */
 export function tap(): void {
-  note(440, 60, 0, 0.04);
+  note(440, 60, 0, 0.09);
 }

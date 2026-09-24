@@ -16,6 +16,13 @@ describe('CATEGORIES', () => {
   it('never uses a call-sign word as a secret word, so naming a seat cannot leak it', () => {
     for (const c of CATEGORIES) for (const w of c.words) expect(ALIAS_WORDS.has(w)).toBe(false);
   });
+
+  it('never puts a secret word in its own category name, so the imposter cannot read it off the card', () => {
+    for (const c of CATEGORIES) {
+      const name = normalizeWord(c.name);
+      for (const w of c.words) expect(name).not.toContain(w);
+    }
+  });
 });
 
 describe('pickWord', () => {
