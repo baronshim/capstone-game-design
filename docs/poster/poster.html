@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>For the Record poster</title>
+<!--
+  Poster source. Fixed 2400 x 3200 px canvas (3:4, prints at 18 x 24 in / A2-ish).
+  Render with headless Chrome, no build step:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --screenshot="$PWD/docs/poster/for-the-record-poster.png" --window-size=2400,3200 \
+      --hide-scrollbars --virtual-time-budget=10000 --timeout=20000 --user-data-dir=/tmp/poster-chrome \
+      "file://$PWD/docs/poster/poster.html"
+
+  The QR code is an inline SVG made with the `qrcode` npm package (error correction H) and
+  points at the live game. Regenerate it if the URL ever changes.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #070a13;
+    --bg-glow: #12193a;
+    --ink: #f2f0e8;
+    --muted: #b7bccf;
+    --faint: #7d88ad;
+    --gold: #e6bb5a;
+    --gold-hi: #fbe39a;
+    --gold-lo: #7a5a1c;
+    --teal: #56e0c8;
+    --display: 'Chakra Petch', system-ui, sans-serif;
+    --body: 'IBM Plex Sans', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 2400px; height: 3200px; overflow: hidden; }
+  body {
+    position: relative;
+    font-family: var(--body);
+    color: var(--ink);
+    background:
+      radial-gradient(1400px 900px at 50% 26%, var(--bg-glow) 0%, transparent 70%),
+      radial-gradient(900px 700px at 50% 100%, rgba(230,187,90,0.10) 0%, transparent 65%),
+      var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  #stars { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .frame { position: absolute; inset: 0; padding: 120px 140px 110px; display: flex; flex-direction: column; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 30px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--gold);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .eyebrow .rule { flex: 1; height: 2px; margin: 0 36px; background: linear-gradient(90deg, transparent, var(--gold-lo), transparent); }
+
+  .disk { position: relative; width: 1540px; height: 1540px; margin: 70px auto 0; }
+  .disk svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+  .cutnote {
+    position: absolute; right: -60px; top: 190px; width: 470px;
+    font-family: var(--mono); font-size: 28px; line-height: 1.45; color: var(--muted);
+    text-align: left;
+  }
+  .cutnote b { display: block; color: var(--gold-hi); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 26px; margin-bottom: 8px; }
+
+  .title { margin-top: 90px; text-align: center; }
+  h1 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 300px;
+    line-height: 0.88;
+    letter-spacing: 0.005em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  h1 .for { color: var(--ink); font-size: 0.52em; display: block; letter-spacing: 0.22em; font-weight: 600; margin-bottom: 18px; }
+  h1 .record {
+    background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 55%, #b98a2c 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub {
+    margin: 54px auto 0; max-width: 1760px;
+    font-size: 54px; line-height: 1.32; color: var(--muted); text-wrap: balance;
+  }
+  .sub em { font-style: normal; color: var(--ink); }
+
+  .bottom { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 80px; }
+  .facts { font-family: var(--mono); font-size: 30px; line-height: 1.8; color: var(--muted); letter-spacing: 0.04em; }
+  .facts div { white-space: nowrap; }
+  .facts .k { color: var(--gold); }
+  .facts .book { white-space: normal; margin-top: 28px; font-family: var(--body); font-size: 30px; color: var(--faint); letter-spacing: 0; line-height: 1.4; }
+
+  .scan { display: flex; align-items: center; gap: 48px; }
+  .scan .label { text-align: right; }
+  .scan .label b { display: block; font-family: var(--display); font-weight: 700; font-size: 58px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); line-height: 1; }
+  .scan .label span { display: block; margin-top: 16px; font-family: var(--mono); font-size: 27px; color: var(--teal); letter-spacing: 0.02em; white-space: nowrap; }
+  .scan .label small { display: block; margin-top: 12px; font-size: 26px; color: var(--faint); }
+  .qr { width: 420px; height: 420px; padding: 26px; background: #fffdf5; border-radius: 22px; box-shadow: 0 0 0 4px var(--gold-lo), 0 0 80px rgba(230,187,90,0.28); }
+  .qr svg { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<svg id="stars" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 3200" preserveAspectRatio="none"></svg>
+
+<div class="frame">
+  <div class="eyebrow"><span>A golden record you play</span><span class="rule"></span><span>Six voices · one secret word</span></div>
+
+  <div class="disk">
+    <svg viewBox="-800 -800 1600 1600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="gold" cx="38%" cy="32%" r="80%">
+          <stop offset="0" stop-color="#fbe39a"/>
+          <stop offset="0.45" stop-color="#e6bb5a"/>
+          <stop offset="0.8" stop-color="#a97a2a"/>
+          <stop offset="1" stop-color="#6b4a14"/>
+        </radialGradient>
+        <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#fff" stop-opacity="0.35"/>
+          <stop offset="0.35" stop-color="#fff" stop-opacity="0"/>
+          <stop offset="0.7" stop-color="#fff" stop-opacity="0"/>
+          <stop offset="1" stop-color="#fff" stop-opacity="0.18"/>
+        </linearGradient>
+        <clipPath id="kept"><path id="keptPath"/></clipPath>
+        <path id="ring" d="M 0 -640 A 640 640 0 1 1 -0.01 -640"/>
+        <path id="ringInner" d="M 0 -300 A 300 300 0 1 1 -0.01 -300"/>
+      </defs>
+
+      <!-- halo -->
+      <circle r="760" fill="none" stroke="#e6bb5a" stroke-opacity="0.10" stroke-width="2"/>
+
+      <!-- the part that was cut: ghost sector, only its outline -->
+      <g id="ghost"></g>
+
+      <!-- the record that was kept -->
+      <g clip-path="url(#kept)">
+        <circle r="720" fill="url(#gold)"/>
+        <g id="grooves"></g>
+        <circle r="720" fill="url(#sheen)"/>
+        <!-- pulsar map -->
+        <g id="pulsars" stroke="#3a2a0c" stroke-opacity="0.55" stroke-width="3" fill="none"></g>
+        <!-- label -->
+        <circle r="250" fill="#f6ead0"/>
+        <circle r="250" fill="none" stroke="#7a5a1c" stroke-width="4"/>
+        <circle r="238" fill="none" stroke="#7a5a1c" stroke-opacity="0.5" stroke-width="1.5" stroke-dasharray="3 6"/>
+        <!-- hydrogen atom, the Voyager key -->
+        <g stroke="#3a2a0c" fill="none" stroke-width="4">
+          <circle r="70"/><circle r="70" cx="0" cy="0" stroke-dasharray="6 9" transform="rotate(30)"/>
+          <circle r="7" fill="#3a2a0c" stroke="none"/>
+          <circle r="7" cx="70" cy="0" fill="#3a2a0c" stroke="none"/>
+          <line x1="-110" y1="120" x2="110" y2="120"/>
+          <line x1="-110" y1="110" x2="-110" y2="130"/><line x1="110" y1="110" x2="110" y2="130"/>
+        </g>
+        <text font-family="IBM Plex Mono" font-size="22" font-weight="600" letter-spacing="6" fill="#3a2a0c" text-anchor="middle" y="-150">THE SOUNDS OF EARTH</text>
+        <text font-family="IBM Plex Mono" font-size="17" letter-spacing="4" fill="#7a5a1c" text-anchor="middle" y="190">SIDE A · WHAT WE CHOSE TO SEND</text>
+        <text font-family="IBM Plex Mono" font-size="17" letter-spacing="4" fill="#7a5a1c" text-anchor="middle" y="218">33⅓ RPM · 1 OF 6 VOICES IS NOT WHAT IT SAYS</text>
+        <circle r="18" fill="#070a13"/>
+        <!-- ring text -->
+        <text font-family="IBM Plex Mono" font-size="30" font-weight="600" letter-spacing="9" fill="#3a2a0c" fill-opacity="0.75">
+          <textPath href="#ring" startOffset="0">SIX VOICES ON THE RECORD · ONE NEVER LEARNED THE WORD · SOME OF THEM ARE MACHINES · DECIDE WHAT MAKES THE CUT ·</textPath>
+        </text>
+      </g>
+
+      <!-- rim of the kept sector -->
+      <circle r="720" fill="none" stroke="#fbe39a" stroke-opacity="0.35" stroke-width="2" clip-path="url(#kept)"/>
+    </svg>
+
+    <div class="cutnote"><b>Cut from the record</b>The hospital. The long drive back. The things you said when nobody was recording. A portrait of yourself is mostly what you left out.</div>
+  </div>
+
+  <div class="title">
+    <h1><span class="for">For the</span><span class="record">Record</span></h1>
+    <p class="sub">The Golden Record is a portrait of Earth with the ugly parts cut out. So is every chat. <em>Six of you go on the record. One never learned the word. Some are machines.</em> Read the takes. Vote. Decide what makes the cut.</p>
+  </div>
+
+  <div class="bottom">
+    <div class="facts">
+      <div><span class="k">2</span> one-word clues each · <span class="k">150</span> seconds of chat · <span class="k">1</span> vote</div>
+      <div>Call every seat <span class="k">human</span> or <span class="k">bot</span> before the reveal</div>
+      <div>Phone browser · 1 to 6 players · bots fill the empty seats</div>
+      <div class="book">A game built from <i>See You in the Cosmos</i> by Jack Cheng.</div>
+    </div>
+    <div class="scan">
+      <div class="label"><b>Scan<br>to play</b><span>imposter-turing.baronshim.workers.dev</span><small>No app. No account. One room code.</small></div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41 41" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h41v41H0z"/><path stroke="#000000" d="M0 0.5h7m1 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h1m2 0h3m2 0h1m1 0h3m1 0h7M0 1.5h1m5 0h1m1 0h3m1 0h2m4 0h6m1 0h3m2 0h1m1 0h1m1 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h3m1 0h2m1 0h3m6 0h2m1 0h2m2 0h1m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m2 0h2m2 0h1m2 0h7m1 0h1m1 0h2m2 0h2m2 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m2 0h1m3 0h1m1 0h1m2 0h3m4 0h1m2 0h2m1 0h1m2 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h2m2 0h2m3 0h3m3 0h1m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m2 0h1m1 0h2m2 0h1m1 0h3m1 0h1m4 0h1m2 0h2M2 8.5h3m1 0h1m1 0h2m1 0h1m3 0h1m3 0h2m2 0h3m2 0h2m3 0h3m2 0h3M2 9.5h2m3 0h2m3 0h4m1 0h2m1 0h2m2 0h1m1 0h1m1 0h5m1 0h3m1 0h2M0 10.5h1m1 0h1m1 0h1m1 0h2m1 0h1m1 0h5m1 0h2m3 0h1m1 0h6m2 0h2m5 0h1M0 11.5h1m1 0h1m4 0h1m1 0h1m2 0h6m3 0h1m2 0h1m1 0h1m3 0h3m2 0h1m1 0h1m1 0h2M0 12.5h1m4 0h5m1 0h2m1 0h1m3 0h4m2 0h1m1 0h4m1 0h1m1 0h1m1 0h1m1 0h2M2 13.5h3m3 0h3m1 0h1m1 0h1m2 0h3m2 0h1m1 0h1m1 0h2m2 0h1m1 0h1m2 0h2m2 0h2M1 14.5h1m1 0h4m3 0h1m3 0h1m2 0h4m6 0h2m2 0h1m1 0h1m1 0h2m1 0h1M2 15.5h1m6 0h1m2 0h1m4 0h2m1 0h3m1 0h1m1 0h2m3 0h2m1 0h3m3 0h1M1 16.5h1m1 0h5m4 0h4m1 0h3m1 0h2m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m2 0h2M1 17.5h3m3 0h1m4 0h1m2 0h1m3 0h1m1 0h3m4 0h2m1 0h2m1 0h3m1 0h1m1 0h1M0 18.5h2m1 0h4m6 0h1m1 0h2m1 0h1m1 0h1m1 0h3m1 0h2m1 0h1m3 0h1m2 0h1M0 19.5h1m2 0h2m2 0h2m1 0h2m6 0h4m3 0h2m1 0h4m1 0h2m1 0h2M0 20.5h3m1 0h1m1 0h1m1 0h1m1 0h1m2 0h3m2 0h1m4 0h1m12 0h1m1 0h1M0 21.5h3m1 0h2m2 0h1m1 0h1m1 0h1m1 0h2m3 0h1m1 0h1m1 0h2m3 0h8m1 0h4M0 22.5h2m2 0h1m1 0h2m1 0h1m1 0h3m1 0h1m2 0h2m1 0h3m2 0h2m10 0h1M0 23.5h2m1 0h1m4 0h1m1 0h1m1 0h1m2 0h1m1 0h5m1 0h1m1 0h2m4 0h2m1 0h2m1 0h2M1 24.5h1m4 0h1m2 0h1m3 0h1m5 0h11m1 0h1m8 0h1M2 25.5h1m4 0h2m4 0h2m6 0h1m2 0h1m3 0h1m2 0h1m1 0h2m1 0h2m2 0h1M0 26.5h1m1 0h1m3 0h3m2 0h1m1 0h1m1 0h2m2 0h2m1 0h1m1 0h2m1 0h4m1 0h1m1 0h3M1 27.5h1m1 0h3m2 0h2m3 0h1m1 0h2m2 0h1m5 0h2m1 0h1m1 0h6m1 0h1M0 28.5h1m1 0h6m1 0h4m1 0h3m2 0h2m2 0h4m2 0h1m1 0h2m1 0h2m1 0h2M0 29.5h2m1 0h2m4 0h1m2 0h1m1 0h5m1 0h1m1 0h2m1 0h1m1 0h2m1 0h1m2 0h1m1 0h4m1 0h1M0 30.5h1m1 0h2m2 0h4m6 0h1m1 0h1m3 0h1m1 0h1m4 0h2m1 0h3m1 0h2M0 31.5h1m3 0h1m2 0h1m2 0h5m3 0h9m1 0h1m1 0h1m2 0h5m1 0h2M0 32.5h1m2 0h1m1 0h3m4 0h2m1 0h1m2 0h2m1 0h2m2 0h1m3 0h1m2 0h7m1 0h1M8 33.5h2m2 0h1m2 0h1m1 0h1m3 0h1m2 0h1m6 0h2m3 0h1m1 0h3M0 34.5h7m2 0h4m3 0h3m2 0h1m2 0h5m1 0h3m1 0h1m1 0h2M0 35.5h1m5 0h1m3 0h1m1 0h1m2 0h1m1 0h2m5 0h2m5 0h2m3 0h2m1 0h1M0 36.5h1m1 0h3m1 0h1m1 0h2m1 0h3m1 0h3m2 0h1m1 0h3m1 0h3m1 0h1m1 0h5m1 0h1M0 37.5h1m1 0h3m1 0h1m1 0h4m3 0h2m2 0h1m4 0h2m2 0h1m2 0h3m1 0h1m3 0h2M0 38.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m2 0h2m1 0h1m1 0h1m1 0h1m2 0h2m1 0h8m1 0h1M0 39.5h1m5 0h1m2 0h1m1 0h1m1 0h5m4 0h1m4 0h1m2 0h1m1 0h3m1 0h1m2 0h1M0 40.5h7m9 0h1m2 0h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m3 0h3"/></svg>
+</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // deterministic starfield
+  (function () {
+    let s = 20260928;
+    const rnd = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const svg = document.getElementById('stars');
+    let out = '';
+    for (let i = 0; i < 520; i++) {
+      const x = rnd() * 2400, y = rnd() * 3200, r = 0.6 + rnd() * 1.9, o = 0.12 + rnd() * 0.6;
+      out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="#fff" fill-opacity="${o.toFixed(2)}"/>`;
+    }
+    svg.innerHTML = out;
+  })();
+
+  // the kept sector: everything except a wedge from 20° to 62° (clockwise from 12 o'clock)
+  (function () {
+    const R = 800, a0 = 20, a1 = 62;
+    const pt = (deg, r) => { const t = (deg - 90) * Math.PI / 180; return [r * Math.cos(t), r * Math.sin(t)]; };
+    const [x0, y0] = pt(a0, R), [x1, y1] = pt(a1, R);
+    document.getElementById('keptPath').setAttribute('d',
+      `M 0 0 L ${x1} ${y1} A ${R} ${R} 0 1 1 ${x0} ${y0} Z`);
+
+    // ghost of the missing wedge: dashed edges and a few broken grooves
+    const g = document.getElementById('ghost');
+    let out = '';
+    const [gx0, gy0] = pt(a0, 720), [gx1, gy1] = pt(a1, 720);
+    out += `<path d="M 0 0 L ${gx0} ${gy0} A 720 720 0 0 1 ${gx1} ${gy1} Z" fill="#e6bb5a" fill-opacity="0.04" stroke="#e6bb5a" stroke-opacity="0.45" stroke-width="3" stroke-dasharray="14 16"/>`;
+    for (let r = 300; r < 720; r += 60) {
+      const [ax, ay] = pt(a0 + 3, r), [bx, by] = pt(a1 - 3, r);
+      out += `<path d="M ${ax} ${ay} A ${r} ${r} 0 0 1 ${bx} ${by}" fill="none" stroke="#e6bb5a" stroke-opacity="0.22" stroke-width="2" stroke-dasharray="4 18"/>`;
+    }
+    g.innerHTML = out;
+
+    // grooves
+    let gr = '';
+    for (let r = 262; r < 716; r += 6) {
+      const o = 0.10 + 0.14 * Math.abs(Math.sin(r / 23));
+      gr += `<circle r="${r}" fill="none" stroke="#3a2a0c" stroke-opacity="${o.toFixed(3)}" stroke-width="1.6"/>`;
+    }
+    for (const r of [330, 420, 505, 590, 660]) gr += `<circle r="${r}" fill="none" stroke="#fbe39a" stroke-opacity="0.35" stroke-width="2.5"/>`;
+    document.getElementById('grooves').innerHTML = gr;
+
+    // pulsar map: lines from the label edge outward with binary tick marks
+    let pm = '';
+    const angles = [95, 118, 141, 166, 190, 214, 237, 262, 284, 309, 333, 352];
+    let k = 7;
+    for (const a of angles) {
+      const len = 250 + ((k * 37) % 300); k++;
+      const [x1, y1] = pt(a, 252), [x2, y2] = pt(a, 252 + len);
+      pm += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+      for (let t = 40; t < len; t += 40 + (k % 3) * 16) {
+        const [cx, cy] = pt(a, 252 + t);
+        pm += `<circle cx="${cx}" cy="${cy}" r="${(k + t) % 2 ? 3 : 5}" fill="#3a2a0c" fill-opacity="0.55" stroke="none"/>`;
+      }
+    }
+    document.getElementById('pulsars').innerHTML = pm;
+  })();
+</script>
+</body>
+</html>

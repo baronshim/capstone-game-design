@@ -1,4 +1,4 @@
-# Imposter Turing
+# For the Record
 
 A chat-based social deduction game where humans and AI bots share a 6-seat
 room. One seat is the imposter who does not know the word; every seat is
@@ -7,6 +7,12 @@ seats are bots trying to pass as human. Built for the See You in the Cosmos
 adaptation assignment (theme: the curated self vs. the actual self).
 
 Play it: https://imposter-turing.baronshim.workers.dev
+
+Renamed from Imposter Turing on 2026-09-28. The Cloudflare worker keeps the old
+name so the URL, and the QR code on the poster, stay valid.
+
+Poster: `docs/poster/for-the-record-poster.png` (2400 x 3200, source in
+`docs/poster/poster.html`, which documents the headless-Chrome render command).
 
 Design spec: `docs/superpowers/specs/2026-09-04-imposter-turing-design.md`
 Plans: `docs/superpowers/plans/`

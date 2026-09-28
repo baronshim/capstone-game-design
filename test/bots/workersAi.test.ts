@@ -64,7 +64,7 @@ describe('WorkersAiBackend', () => {
     expect(req.chat_template_kwargs).toEqual({ enable_thinking: false });
     const messages = req.messages as { role: string; content: string }[];
     expect(messages.map((m) => m.role)).toEqual(['system', 'user']);
-    expect(messages[0].content).toContain('Imposter Turing');
+    expect(messages[0].content).toContain('For the Record');
     expect(messages[1].content).toContain('cheese');
     await backend.run(inputs('chat'));
     expect(ai.calls[1].inputs.temperature).toBe(1.0);
