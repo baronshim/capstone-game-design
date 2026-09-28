@@ -59,7 +59,7 @@
   }
   .eyebrow .rule { flex: 1; height: 2px; margin: 0 36px; background: linear-gradient(90deg, transparent, var(--gold-lo), transparent); }
 
-  .disk { position: relative; width: 1540px; height: 1540px; margin: 70px auto 0; }
+  .disk { position: relative; width: 1560px; height: 1560px; margin: 40px auto 0; }
   .disk svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 
   .cutnote {
@@ -69,7 +69,7 @@
   }
   .cutnote b { display: block; color: var(--gold-hi); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 26px; margin-bottom: 8px; }
 
-  .title { margin-top: 90px; text-align: center; }
+  .title { margin-top: 110px; text-align: center; }
   h1 {
     margin: 0;
     font-family: var(--display);
@@ -86,32 +86,22 @@
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .sub {
-    margin: 54px auto 0; max-width: 1760px;
-    font-size: 54px; line-height: 1.32; color: var(--muted); text-wrap: balance;
+    margin: 48px auto 0; max-width: 1760px;
+    font-size: 60px; line-height: 1.32; color: var(--muted); text-wrap: balance;
   }
   .sub em { font-style: normal; color: var(--ink); }
 
-  .bottom { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 80px; }
-  .facts { font-family: var(--mono); font-size: 30px; line-height: 1.8; color: var(--muted); letter-spacing: 0.04em; }
-  .facts div { white-space: nowrap; }
-  .facts .k { color: var(--gold); }
-  .facts .book { white-space: normal; margin-top: 28px; font-family: var(--body); font-size: 30px; color: var(--faint); letter-spacing: 0; line-height: 1.4; }
-
-  .scan { display: flex; align-items: center; gap: 48px; }
-  .scan .label { text-align: right; }
-  .scan .label b { display: block; font-family: var(--display); font-weight: 700; font-size: 58px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); line-height: 1; }
-  .scan .label span { display: block; margin-top: 16px; font-family: var(--mono); font-size: 27px; color: var(--teal); letter-spacing: 0.02em; white-space: nowrap; }
-  .scan .label small { display: block; margin-top: 12px; font-size: 26px; color: var(--faint); }
-  .qr { width: 420px; height: 420px; padding: 26px; background: #fffdf5; border-radius: 22px; box-shadow: 0 0 0 4px var(--gold-lo), 0 0 80px rgba(230,187,90,0.28); }
+  .bottom { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+  .qr { width: 460px; height: 460px; padding: 28px; background: #fffdf5; border-radius: 22px; box-shadow: 0 0 0 4px var(--gold-lo), 0 0 90px rgba(230,187,90,0.28); }
   .qr svg { width: 100%; height: 100%; display: block; }
+  .scanlabel { font-family: var(--display); font-weight: 700; font-size: 52px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }
+  .credit { margin-top: 6px; font-size: 28px; color: var(--faint); }
 </style>
 </head>
 <body>
 <svg id="stars" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 3200" preserveAspectRatio="none"></svg>
 
 <div class="frame">
-  <div class="eyebrow"><span>A golden record you play</span><span class="rule"></span><span>Six voices · one secret word</span></div>
-
   <div class="disk">
     <svg viewBox="-800 -800 1600 1600" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -157,40 +147,24 @@
           <line x1="-110" y1="120" x2="110" y2="120"/>
           <line x1="-110" y1="110" x2="-110" y2="130"/><line x1="110" y1="110" x2="110" y2="130"/>
         </g>
-        <text font-family="IBM Plex Mono" font-size="22" font-weight="600" letter-spacing="6" fill="#3a2a0c" text-anchor="middle" y="-150">THE SOUNDS OF EARTH</text>
-        <text font-family="IBM Plex Mono" font-size="17" letter-spacing="4" fill="#7a5a1c" text-anchor="middle" y="190">SIDE A · WHAT WE CHOSE TO SEND</text>
-        <text font-family="IBM Plex Mono" font-size="17" letter-spacing="4" fill="#7a5a1c" text-anchor="middle" y="218">33⅓ RPM · 1 OF 6 VOICES IS NOT WHAT IT SAYS</text>
         <circle r="18" fill="#070a13"/>
-        <!-- ring text -->
-        <text font-family="IBM Plex Mono" font-size="30" font-weight="600" letter-spacing="9" fill="#3a2a0c" fill-opacity="0.75">
-          <textPath href="#ring" startOffset="0">SIX VOICES ON THE RECORD · ONE NEVER LEARNED THE WORD · SOME OF THEM ARE MACHINES · DECIDE WHAT MAKES THE CUT ·</textPath>
-        </text>
       </g>
 
       <!-- rim of the kept sector -->
       <circle r="720" fill="none" stroke="#fbe39a" stroke-opacity="0.35" stroke-width="2" clip-path="url(#kept)"/>
     </svg>
 
-    <div class="cutnote"><b>Cut from the record</b>The hospital. The long drive back. The things you said when nobody was recording. A portrait of yourself is mostly what you left out.</div>
   </div>
 
   <div class="title">
     <h1><span class="for">For the</span><span class="record">Record</span></h1>
-    <p class="sub">The Golden Record is a portrait of Earth with the ugly parts cut out. So is every chat. <em>Six of you go on the record. One never learned the word. Some are machines.</em> Read the takes. Vote. Decide what makes the cut.</p>
+    <p class="sub">Six voices go on the record. One is lying. Some are machines.</p>
   </div>
 
   <div class="bottom">
-    <div class="facts">
-      <div><span class="k">2</span> one-word clues each · <span class="k">150</span> seconds of chat · <span class="k">1</span> vote</div>
-      <div>Call every seat <span class="k">human</span> or <span class="k">bot</span> before the reveal</div>
-      <div>Phone browser · 1 to 6 players · bots fill the empty seats</div>
-      <div class="book">A game built from <i>See You in the Cosmos</i> by Jack Cheng.</div>
-    </div>
-    <div class="scan">
-      <div class="label"><b>Scan<br>to play</b><span>imposter-turing.baronshim.workers.dev</span><small>No app. No account. One room code.</small></div>
-      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41 41" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h41v41H0z"/><path stroke="#000000" d="M0 0.5h7m1 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h1m2 0h3m2 0h1m1 0h3m1 0h7M0 1.5h1m5 0h1m1 0h3m1 0h2m4 0h6m1 0h3m2 0h1m1 0h1m1 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h3m1 0h2m1 0h3m6 0h2m1 0h2m2 0h1m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m2 0h2m2 0h1m2 0h7m1 0h1m1 0h2m2 0h2m2 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m2 0h1m3 0h1m1 0h1m2 0h3m4 0h1m2 0h2m1 0h1m2 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h2m2 0h2m3 0h3m3 0h1m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m2 0h1m1 0h2m2 0h1m1 0h3m1 0h1m4 0h1m2 0h2M2 8.5h3m1 0h1m1 0h2m1 0h1m3 0h1m3 0h2m2 0h3m2 0h2m3 0h3m2 0h3M2 9.5h2m3 0h2m3 0h4m1 0h2m1 0h2m2 0h1m1 0h1m1 0h5m1 0h3m1 0h2M0 10.5h1m1 0h1m1 0h1m1 0h2m1 0h1m1 0h5m1 0h2m3 0h1m1 0h6m2 0h2m5 0h1M0 11.5h1m1 0h1m4 0h1m1 0h1m2 0h6m3 0h1m2 0h1m1 0h1m3 0h3m2 0h1m1 0h1m1 0h2M0 12.5h1m4 0h5m1 0h2m1 0h1m3 0h4m2 0h1m1 0h4m1 0h1m1 0h1m1 0h1m1 0h2M2 13.5h3m3 0h3m1 0h1m1 0h1m2 0h3m2 0h1m1 0h1m1 0h2m2 0h1m1 0h1m2 0h2m2 0h2M1 14.5h1m1 0h4m3 0h1m3 0h1m2 0h4m6 0h2m2 0h1m1 0h1m1 0h2m1 0h1M2 15.5h1m6 0h1m2 0h1m4 0h2m1 0h3m1 0h1m1 0h2m3 0h2m1 0h3m3 0h1M1 16.5h1m1 0h5m4 0h4m1 0h3m1 0h2m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m2 0h2M1 17.5h3m3 0h1m4 0h1m2 0h1m3 0h1m1 0h3m4 0h2m1 0h2m1 0h3m1 0h1m1 0h1M0 18.5h2m1 0h4m6 0h1m1 0h2m1 0h1m1 0h1m1 0h3m1 0h2m1 0h1m3 0h1m2 0h1M0 19.5h1m2 0h2m2 0h2m1 0h2m6 0h4m3 0h2m1 0h4m1 0h2m1 0h2M0 20.5h3m1 0h1m1 0h1m1 0h1m1 0h1m2 0h3m2 0h1m4 0h1m12 0h1m1 0h1M0 21.5h3m1 0h2m2 0h1m1 0h1m1 0h1m1 0h2m3 0h1m1 0h1m1 0h2m3 0h8m1 0h4M0 22.5h2m2 0h1m1 0h2m1 0h1m1 0h3m1 0h1m2 0h2m1 0h3m2 0h2m10 0h1M0 23.5h2m1 0h1m4 0h1m1 0h1m1 0h1m2 0h1m1 0h5m1 0h1m1 0h2m4 0h2m1 0h2m1 0h2M1 24.5h1m4 0h1m2 0h1m3 0h1m5 0h11m1 0h1m8 0h1M2 25.5h1m4 0h2m4 0h2m6 0h1m2 0h1m3 0h1m2 0h1m1 0h2m1 0h2m2 0h1M0 26.5h1m1 0h1m3 0h3m2 0h1m1 0h1m1 0h2m2 0h2m1 0h1m1 0h2m1 0h4m1 0h1m1 0h3M1 27.5h1m1 0h3m2 0h2m3 0h1m1 0h2m2 0h1m5 0h2m1 0h1m1 0h6m1 0h1M0 28.5h1m1 0h6m1 0h4m1 0h3m2 0h2m2 0h4m2 0h1m1 0h2m1 0h2m1 0h2M0 29.5h2m1 0h2m4 0h1m2 0h1m1 0h5m1 0h1m1 0h2m1 0h1m1 0h2m1 0h1m2 0h1m1 0h4m1 0h1M0 30.5h1m1 0h2m2 0h4m6 0h1m1 0h1m3 0h1m1 0h1m4 0h2m1 0h3m1 0h2M0 31.5h1m3 0h1m2 0h1m2 0h5m3 0h9m1 0h1m1 0h1m2 0h5m1 0h2M0 32.5h1m2 0h1m1 0h3m4 0h2m1 0h1m2 0h2m1 0h2m2 0h1m3 0h1m2 0h7m1 0h1M8 33.5h2m2 0h1m2 0h1m1 0h1m3 0h1m2 0h1m6 0h2m3 0h1m1 0h3M0 34.5h7m2 0h4m3 0h3m2 0h1m2 0h5m1 0h3m1 0h1m1 0h2M0 35.5h1m5 0h1m3 0h1m1 0h1m2 0h1m1 0h2m5 0h2m5 0h2m3 0h2m1 0h1M0 36.5h1m1 0h3m1 0h1m1 0h2m1 0h3m1 0h3m2 0h1m1 0h3m1 0h3m1 0h1m1 0h5m1 0h1M0 37.5h1m1 0h3m1 0h1m1 0h4m3 0h2m2 0h1m4 0h2m2 0h1m2 0h3m1 0h1m3 0h2M0 38.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m2 0h2m1 0h1m1 0h1m1 0h1m2 0h2m1 0h8m1 0h1M0 39.5h1m5 0h1m2 0h1m1 0h1m1 0h5m4 0h1m4 0h1m2 0h1m1 0h3m1 0h1m2 0h1M0 40.5h7m9 0h1m2 0h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m3 0h3"/></svg>
-</div>
-    </div>
+    <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41 41" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h41v41H0z"/><path stroke="#000000" d="M0 0.5h7m1 0h1m1 0h1m1 0h2m1 0h1m2 0h1m1 0h1m2 0h3m2 0h1m1 0h3m1 0h7M0 1.5h1m5 0h1m1 0h3m1 0h2m4 0h6m1 0h3m2 0h1m1 0h1m1 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h3m1 0h2m1 0h3m6 0h2m1 0h2m2 0h1m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m2 0h2m2 0h1m2 0h7m1 0h1m1 0h2m2 0h2m2 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m2 0h1m3 0h1m1 0h1m2 0h3m4 0h1m2 0h2m1 0h1m2 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h2m2 0h2m3 0h3m3 0h1m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m2 0h1m1 0h2m2 0h1m1 0h3m1 0h1m4 0h1m2 0h2M2 8.5h3m1 0h1m1 0h2m1 0h1m3 0h1m3 0h2m2 0h3m2 0h2m3 0h3m2 0h3M2 9.5h2m3 0h2m3 0h4m1 0h2m1 0h2m2 0h1m1 0h1m1 0h5m1 0h3m1 0h2M0 10.5h1m1 0h1m1 0h1m1 0h2m1 0h1m1 0h5m1 0h2m3 0h1m1 0h6m2 0h2m5 0h1M0 11.5h1m1 0h1m4 0h1m1 0h1m2 0h6m3 0h1m2 0h1m1 0h1m3 0h3m2 0h1m1 0h1m1 0h2M0 12.5h1m4 0h5m1 0h2m1 0h1m3 0h4m2 0h1m1 0h4m1 0h1m1 0h1m1 0h1m1 0h2M2 13.5h3m3 0h3m1 0h1m1 0h1m2 0h3m2 0h1m1 0h1m1 0h2m2 0h1m1 0h1m2 0h2m2 0h2M1 14.5h1m1 0h4m3 0h1m3 0h1m2 0h4m6 0h2m2 0h1m1 0h1m1 0h2m1 0h1M2 15.5h1m6 0h1m2 0h1m4 0h2m1 0h3m1 0h1m1 0h2m3 0h2m1 0h3m3 0h1M1 16.5h1m1 0h5m4 0h4m1 0h3m1 0h2m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m2 0h2M1 17.5h3m3 0h1m4 0h1m2 0h1m3 0h1m1 0h3m4 0h2m1 0h2m1 0h3m1 0h1m1 0h1M0 18.5h2m1 0h4m6 0h1m1 0h2m1 0h1m1 0h1m1 0h3m1 0h2m1 0h1m3 0h1m2 0h1M0 19.5h1m2 0h2m2 0h2m1 0h2m6 0h4m3 0h2m1 0h4m1 0h2m1 0h2M0 20.5h3m1 0h1m1 0h1m1 0h1m1 0h1m2 0h3m2 0h1m4 0h1m12 0h1m1 0h1M0 21.5h3m1 0h2m2 0h1m1 0h1m1 0h1m1 0h2m3 0h1m1 0h1m1 0h2m3 0h8m1 0h4M0 22.5h2m2 0h1m1 0h2m1 0h1m1 0h3m1 0h1m2 0h2m1 0h3m2 0h2m10 0h1M0 23.5h2m1 0h1m4 0h1m1 0h1m1 0h1m2 0h1m1 0h5m1 0h1m1 0h2m4 0h2m1 0h2m1 0h2M1 24.5h1m4 0h1m2 0h1m3 0h1m5 0h11m1 0h1m8 0h1M2 25.5h1m4 0h2m4 0h2m6 0h1m2 0h1m3 0h1m2 0h1m1 0h2m1 0h2m2 0h1M0 26.5h1m1 0h1m3 0h3m2 0h1m1 0h1m1 0h2m2 0h2m1 0h1m1 0h2m1 0h4m1 0h1m1 0h3M1 27.5h1m1 0h3m2 0h2m3 0h1m1 0h2m2 0h1m5 0h2m1 0h1m1 0h6m1 0h1M0 28.5h1m1 0h6m1 0h4m1 0h3m2 0h2m2 0h4m2 0h1m1 0h2m1 0h2m1 0h2M0 29.5h2m1 0h2m4 0h1m2 0h1m1 0h5m1 0h1m1 0h2m1 0h1m1 0h2m1 0h1m2 0h1m1 0h4m1 0h1M0 30.5h1m1 0h2m2 0h4m6 0h1m1 0h1m3 0h1m1 0h1m4 0h2m1 0h3m1 0h2M0 31.5h1m3 0h1m2 0h1m2 0h5m3 0h9m1 0h1m1 0h1m2 0h5m1 0h2M0 32.5h1m2 0h1m1 0h3m4 0h2m1 0h1m2 0h2m1 0h2m2 0h1m3 0h1m2 0h7m1 0h1M8 33.5h2m2 0h1m2 0h1m1 0h1m3 0h1m2 0h1m6 0h2m3 0h1m1 0h3M0 34.5h7m2 0h4m3 0h3m2 0h1m2 0h5m1 0h3m1 0h1m1 0h2M0 35.5h1m5 0h1m3 0h1m1 0h1m2 0h1m1 0h2m5 0h2m5 0h2m3 0h2m1 0h1M0 36.5h1m1 0h3m1 0h1m1 0h2m1 0h3m1 0h3m2 0h1m1 0h3m1 0h3m1 0h1m1 0h5m1 0h1M0 37.5h1m1 0h3m1 0h1m1 0h4m3 0h2m2 0h1m4 0h2m2 0h1m2 0h3m1 0h1m3 0h2M0 38.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m2 0h2m1 0h1m1 0h1m1 0h1m2 0h2m1 0h8m1 0h1M0 39.5h1m5 0h1m2 0h1m1 0h1m1 0h5m4 0h1m4 0h1m2 0h1m1 0h3m1 0h1m2 0h1M0 40.5h7m9 0h1m2 0h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m3 0h3"/></svg></div>
+    <div class="scanlabel">Scan to play</div>
+    <div class="credit">A game from <i>See You in the Cosmos</i></div>
   </div>
 </div>
 
