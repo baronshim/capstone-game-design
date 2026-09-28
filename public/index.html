@@ -8,12 +8,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <style>
-    /* Deep-space transmission console. Single-world dark design, painted explicitly
+    /* Deep-space console in the poster's gold. Single-world dark design, painted explicitly
        so it holds on any host ground. */
     :root {
       color-scheme: dark;
       --bg: #080b14;
-      --bg-glow: #0e1730;
+      --bg-glow: #12193a;
       --panel: #121a2e;
       --panel-2: #1a2440;
       --field: #0e1526;
@@ -22,12 +22,14 @@
       --ink: #eef1fb;
       --muted: #aab4d2;
       --faint: #7d88ad;
-      --accent: #56e0c8;
-      --accent-ink: #06231e;
-      --accent-dim: rgba(86, 224, 200, 0.14);
+      --accent: #e6bb5a;
+      --accent-hi: #fbe39a;
+      --accent-lo: #7a5a1c;
+      --accent-ink: #2a1d05;
+      --accent-dim: rgba(230, 187, 90, 0.16);
       --good: #5ad98a;
       --bad: #ff7d6b;
-      --warn: #ffce5c;
+      --warn: #ff9f43;
       --display: 'Chakra Petch', system-ui, sans-serif;
       --body: 'IBM Plex Sans', system-ui, sans-serif;
       --mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -88,18 +90,40 @@
     }
 
     /* ---- home ---- */
-    #home { padding-top: 8vh; }
+    #home { padding-top: 5vh; text-align: center; }
+    .record {
+      display: block;
+      width: min(62vw, 250px);
+      height: auto;
+      margin: 0 auto 26px;
+      filter: drop-shadow(0 0 40px rgba(230,187,90,.18));
+    }
     .wordmark {
       font-family: var(--display);
       font-weight: 700;
-      font-size: clamp(34px, 12vw, 52px);
-      line-height: 0.95;
-      letter-spacing: 0.01em;
-      margin: 10px 0 6px;
-      text-wrap: balance;
+      line-height: 0.9;
+      text-transform: uppercase;
+      margin: 0 0 14px;
     }
-    .wordmark .im { color: var(--accent); }
-    .tagline { color: var(--muted); margin: 0 0 30px; font-size: 15px; }
+    .wordmark .for {
+      display: block;
+      font-size: clamp(18px, 6vw, 24px);
+      font-weight: 600;
+      letter-spacing: 0.26em;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+    .wordmark .im {
+      display: block;
+      font-size: clamp(56px, 20vw, 82px);
+      letter-spacing: 0.02em;
+      background: linear-gradient(180deg, var(--accent-hi) 0%, var(--accent) 55%, #b98a2c 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .tagline { color: var(--muted); margin: 0 0 30px; font-size: 15px; text-wrap: balance; }
+    #home label.field, #home .or { text-align: left; }
 
     label.field {
       display: block;
@@ -156,7 +180,7 @@
       padding: 14px 16px;
       font-size: 16px;
     }
-    .btn-primary:hover { background: #6df0d8; border-color: transparent; }
+    .btn-primary:hover { background: var(--accent-hi); border-color: transparent; }
 
     .join-row { display: flex; gap: 8px; margin-top: 18px; }
     .join-row input {
@@ -398,7 +422,7 @@
     .callbtns { margin-left: auto; display: flex; gap: 6px; flex: none; }
     .callbtns button { padding: 7px 12px; font-size: 14px; }
     .callbtns button.on[data-call="human"] { background: var(--good); color: #06210f; border-color: transparent; }
-    .callbtns button.on[data-call="bot"] { background: var(--warn); color: #2a2100; border-color: transparent; }
+    .callbtns button.on[data-call="bot"] { background: var(--warn); color: #2a1200; border-color: transparent; }
 
     /* ---- reveal ---- */
     .reveal-panel {
@@ -454,7 +478,7 @@
     }
     .pt.imp { color: var(--bad); border-color: rgba(255,125,107,.4); }
     .pt.vote { color: var(--good); border-color: rgba(90,217,138,.4); }
-    .pt.calls { color: var(--warn); border-color: rgba(255,206,92,.4); }
+    .pt.calls { color: var(--warn); border-color: rgba(255,159,67,.4); }
     .pt.none { color: var(--faint); }
     .score-row .score { font-family: var(--display); font-size: 18px; color: var(--ink); min-width: 2ch; text-align: right; }
     .running { width: 100%; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: -2px; }
@@ -528,9 +552,27 @@
 <body>
   <main>
     <section id="home">
-      <div class="eyebrow">A golden record you play</div>
-      <h1 class="wordmark">For the <span class="im">Record</span></h1>
-      <p class="tagline">Six voices go on the record. One never learned the word. Some are machines. Decide what makes the cut before the imposter finds the word.</p>
+      <svg class="record" viewBox="-800 -800 1600 1600" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A golden record with one wedge cut out">
+        <defs>
+          <radialGradient id="rg" cx="38%" cy="32%" r="80%"><stop offset="0" stop-color="#fbe39a"/><stop offset=".45" stop-color="#e6bb5a"/><stop offset=".8" stop-color="#a97a2a"/><stop offset="1" stop-color="#6b4a14"/></radialGradient>
+          <clipPath id="kept"><path d="M 0 0 L 706.4 -375.6 A 800 800 0 1 1 273.6 -751.8 Z"/></clipPath>
+        </defs>
+        <path d="M 0 0 L 246.3 -676.6 A 720 720 0 0 1 635.7 -338.0 Z" fill="#e6bb5a" fill-opacity=".05" stroke="#e6bb5a" stroke-opacity=".45" stroke-width="6" stroke-dasharray="20 22"/>
+        <g clip-path="url(#kept)">
+          <circle r="720" fill="url(#rg)"/>
+          <circle r="280" fill="none" stroke="#3a2a0c" stroke-opacity="0.28" stroke-width="6"/><circle r="304" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="328" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="352" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="376" fill="none" stroke="#3a2a0c" stroke-opacity="0.28" stroke-width="6"/><circle r="400" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="424" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="448" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="472" fill="none" stroke="#3a2a0c" stroke-opacity="0.28" stroke-width="6"/><circle r="496" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="520" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="544" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="568" fill="none" stroke="#3a2a0c" stroke-opacity="0.28" stroke-width="6"/><circle r="592" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="616" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="640" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="664" fill="none" stroke="#3a2a0c" stroke-opacity="0.28" stroke-width="6"/><circle r="688" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/><circle r="712" fill="none" stroke="#3a2a0c" stroke-opacity="0.14" stroke-width="3"/>
+          <g stroke="#3a2a0c" stroke-opacity=".5" stroke-width="5" fill="none"><line x1="251.0" y1="22.0" x2="500.1" y2="43.8"/><line x1="158.6" y1="195.8" x2="339.2" y2="418.9"/><line x1="-43.8" y1="248.2" x2="-100.0" y2="567.2"/><line x1="-211.3" y1="137.2" x2="-514.1" y2="333.9"/><line x1="-244.5" y1="-61.0" x2="-630.7" y2="-157.2"/><line x1="-114.4" y1="-224.5" x2="-311.9" y2="-612.1"/></g>
+          <circle r="250" fill="#f6ead0"/>
+          <circle r="250" fill="none" stroke="#7a5a1c" stroke-width="6"/>
+          <g stroke="#3a2a0c" fill="none" stroke-width="7">
+            <circle r="70"/><circle r="7" fill="#3a2a0c" stroke="none"/><circle r="7" cx="70" fill="#3a2a0c" stroke="none"/>
+            <line x1="-110" y1="120" x2="110" y2="120"/><line x1="-110" y1="110" x2="-110" y2="130"/><line x1="110" y1="110" x2="110" y2="130"/>
+          </g>
+          <circle r="18" fill="#080b14"/>
+        </g>
+      </svg>
+      <h1 class="wordmark"><span class="for">For the</span><span class="im">Record</span></h1>
+      <p class="tagline">Six voices go on the record. One is lying. Some are machines.</p>
 
       <label class="field">Your name
         <input id="name" maxlength="20" autocomplete="nickname" placeholder="e.g. Alex">
