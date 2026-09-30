@@ -1,6 +1,7 @@
 import type { BotCall, ClientMessage, Phase, ServerMessage, Snapshot } from '../game/protocol';
 import { DURATIONS } from '../game/rules';
 import { chime, ding, isMuted, setMuted, tap, tickSound, unlock } from './sound';
+import { endTutorial, startTutorial, tutorialActive, tutorialOpenRoom, tutorialSeen, tutorialSend } from './tutorial';
 import { BANNERS, botcallHtml, cardHtml, dealHtml, lobbyHint, logHtml, PHASE_LABELS, revealHtml, seatsHtml, turnHtml, typingHtml, verdictHtml, voteHtml } from './views';
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -72,6 +73,11 @@ function send(msg: ClientMessage): void {
   // (e.g. "one word only") stays visible until then instead of being wiped
   // by the state snapshot that follows it.
   showError('');
+  // The practice round has no room: the tutorial script answers instead.
+  if (tutorialActive()) {
+    tutorialSend(msg);
+    return;
+  }
   sendRaw(msg);
 }
 
@@ -116,6 +122,10 @@ function pruneTyping(): boolean {
 }
 
 function connect(code: string): void {
+  if (tutorialActive()) {
+    tutorialOpenRoom();
+    return;
+  }
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -324,6 +334,10 @@ setInterval(tick, 250);
 
 $('create').onclick = async () => {
   unlock();
+  if (tutorialActive()) {
+    tutorialOpenRoom();
+    return;
+  }
   const res = await fetch('/rooms', { method: 'POST' });
   const { code } = (await res.json()) as { code: string };
   connect(code);
@@ -342,7 +356,29 @@ $('again').onclick = () => {
   unlock();
   send({ type: 'again' });
 };
-$('leave').onclick = leave;
+// Leaving the practice room ends the tutorial.
+$('leave').onclick = () => (tutorialActive() ? endTutorial() : leave());
+
+/** The tutorial drives the same renderer with a scripted room. */
+function playTutorial(): void {
+  startTutorial({
+    paint: (snap) => {
+      snapshot = snap;
+      render();
+    },
+    typing: (seat, ms) => {
+      typing.set(seat, Date.now() + ms);
+      paintTyping();
+    },
+    error: showError,
+    playerName: () => $<HTMLInputElement>('name').value,
+    reset: leave,
+  });
+}
+$('tutorial').onclick = () => {
+  unlock();
+  playTutorial();
+};
 
 const help = $<HTMLDialogElement>('help');
 for (const id of ['help-home', 'help-room', 'help-lobby']) {
@@ -354,7 +390,8 @@ for (const id of ['help-home', 'help-room', 'help-lobby']) {
 }
 
 $('copy-link').onclick = async () => {
-  const url = `${location.origin}${location.pathname}?room=${roomCode}`;
+  // In the practice room there is no code to share, so the link is the site itself.
+  const url = `${location.origin}${location.pathname}${roomCode ? `?room=${roomCode}` : ''}`;
   const button = $('copy-link');
   try {
     await navigator.clipboard.writeText(url);
@@ -439,4 +476,8 @@ if (roomParam) {
   $<HTMLInputElement>('code').value = roomParam;
   // Refresh or shared link with a saved name: rejoin the same seat automatically.
   if (savedName) connect(roomParam);
+} else if (!tutorialSeen()) {
+  // First visit: walk through a practice round. Someone arriving on an invite link is
+  // here to join a live room, so the tutorial waits for them to ask for it.
+  playTutorial();
 }

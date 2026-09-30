@@ -17,6 +17,17 @@ Poster: `docs/poster/for-the-record-poster.png` (2400 x 3200, source in
 Design spec: `docs/superpowers/specs/2026-09-04-imposter-turing-design.md`
 Plans: `docs/superpowers/plans/`
 
+## Tutorial
+
+The first visit opens a guided practice round (skippable at any point; the
+Tutorial button on the home screen replays it). It runs entirely in the
+browser with a scripted room, driving the real screens: the player creates
+the room, starts it, reads the card, gives two clues (the real clue checks
+apply), chats, votes, tries the steal box, calls the bots, and reads the
+reveal, with a coach card explaining each step. It does not open on an
+invite link, since that visitor is on their way into a live room.
+`src/client/tutorial.ts`; `localStorage.tutorialSeen` remembers it.
+
 ## A round (as of the 2026-09-17 playtest pass)
 
 1. **Lobby.** Create a room, share the 4-letter code, press Start with 1 to 6

@@ -544,6 +544,49 @@
     footer { margin-top: 22px; text-align: center; }
     .footnote { color: var(--faint); font-size: 11px; font-family: var(--mono); letter-spacing: .08em; }
 
+    .home-tools { display: flex; gap: 8px; margin-top: 22px; }
+    .home-tools button { flex: 1; }
+
+    /* ---- tutorial ---- */
+    /* Room for the coach card, so the spotlit control can scroll clear of it. */
+    body.tut-on main { padding-bottom: 230px; }
+    /* The spotlight: a ring on the control in use, and a dim cast over everything else. */
+    .tut-target {
+      position: relative; z-index: 16;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 0 3px var(--accent), 0 0 0 200vmax rgba(3,5,12,.62);
+      transition: box-shadow .2s;
+    }
+    .tut {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+      pointer-events: none;
+    }
+    .tut-card {
+      pointer-events: auto;
+      width: 100%; max-width: 460px; margin: 0 auto;
+      background: var(--panel); border: 1px solid var(--accent-lo);
+      border-radius: var(--radius); padding: 12px 16px 14px;
+      box-shadow: 0 18px 40px -12px rgba(0,0,0,.95), 0 0 0 1px rgba(230,187,90,.12);
+    }
+    .tut-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .tut-step, .tut-label {
+      font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    }
+    .tut-step { color: var(--accent); }
+    .tut-label { color: var(--faint); }
+    .tut-skip { margin-left: auto; padding: 6px 10px; font-size: 13px; }
+    .tut-title { display: block; font-family: var(--display); font-size: 18px; margin-bottom: 4px; }
+    .tut-text { margin: 0 0 10px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+    .tut-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-height: 38px; }
+    .tut-do {
+      margin-right: auto;
+      font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--accent); animation: pulse 1.6s ease-in-out infinite;
+    }
+    .tut-do::before { content: "\2192 "; }
+    .tut-next { width: auto; padding: 10px 16px; font-size: 15px; }
+
     @media (prefers-reduced-motion: reduce) {
       * { animation: none !important; transition: none !important; }
     }
@@ -586,7 +629,10 @@
         <button id="join">Join</button>
       </div>
 
-      <button id="help-home" class="btn-ghost" style="width:100%;margin-top:22px">How to play</button>
+      <div class="home-tools">
+        <button id="tutorial" class="btn-ghost">Tutorial</button>
+        <button id="help-home" class="btn-ghost">How to play</button>
+      </div>
     </section>
 
     <section id="room" hidden>
@@ -671,6 +717,22 @@
 
   <div id="banner" class="banner" aria-live="polite"><b id="banner-title"></b><span id="banner-sub"></span></div>
   </main>
+
+  <div id="tut" class="tut" role="dialog" aria-labelledby="tut-title" aria-live="polite" hidden>
+    <div class="tut-card">
+      <div class="tut-head">
+        <span id="tut-step" class="tut-step"></span>
+        <span class="tut-label">tutorial</span>
+        <button id="tut-skip" class="btn-ghost tut-skip">Skip tutorial</button>
+      </div>
+      <b id="tut-title" class="tut-title"></b>
+      <p id="tut-text" class="tut-text"></p>
+      <div class="tut-actions">
+        <span id="tut-do" class="tut-do" hidden></span>
+        <button id="tut-next" class="btn-primary tut-next" hidden>Next</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
