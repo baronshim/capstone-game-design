@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { SELF } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
 
 const BASE = 'http://room.test/feedback';
-const KEY = 'test-feedback-key';
+/** Whatever key the test environment carries (wrangler vars, or .dev.vars when present). */
+const KEY = env.FEEDBACK_KEY!;
 let ipCounter = 0;
 
 /** Each test posts from its own address so the per-IP limiter does not bleed between tests. */

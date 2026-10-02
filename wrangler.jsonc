@@ -18,7 +18,7 @@
     { "tag": "v1", "new_sqlite_classes": ["RoomObject"] },
     { "tag": "v2", "new_sqlite_classes": ["FeedbackObject"] }
   ],
-  "vars": { "BOT_MODE": "fake", "ROOM_RATE_LIMIT": "5", "FEEDBACK_RATE_LIMIT": "5", "FEEDBACK_KEY": "dev" },
+  "vars": { "BOT_MODE": "fake", "ROOM_RATE_LIMIT": "5", "FEEDBACK_RATE_LIMIT": "5" },
   // The AI binding needs a Cloudflare login to reach even in `wrangler dev`, so it lives only
   // in `env.production`; local dev and the test environment never declare it.
   "env": {

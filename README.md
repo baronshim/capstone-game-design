@@ -44,7 +44,8 @@ curl -H "Authorization: Bearer $FEEDBACK_KEY" https://imposter-turing.baronshim.
 
 The response is JSON, newest first, with the text, contact, user agent, and
 a Unix-millisecond timestamp. Until the secret is set, every read returns
-401. Local dev uses the key `dev`.
+401. Local dev reads the key from `.dev.vars` (gitignored); create it with
+`FEEDBACK_KEY=dev` if you cloned fresh.
 
 ## A round (as of the 2026-09-17 playtest pass)
 
