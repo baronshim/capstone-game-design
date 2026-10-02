@@ -389,6 +389,46 @@ for (const id of ['help-home', 'help-room', 'help-lobby']) {
   };
 }
 
+const feedback = $<HTMLDialogElement>('feedback');
+const feedbackText = $<HTMLTextAreaElement>('feedback-text');
+const feedbackContact = $<HTMLInputElement>('feedback-contact');
+const feedbackThanks = $('feedback-thanks');
+const feedbackSend = $<HTMLButtonElement>('feedback-send');
+$('feedback-home').onclick = () => {
+  feedbackThanks.textContent = '';
+  feedback.showModal();
+  feedbackText.focus();
+};
+$('feedback-cancel').onclick = () => feedback.close();
+feedbackText.oninput = () => {
+  $('feedback-count').textContent = String(feedbackText.value.length);
+};
+$<HTMLFormElement>('feedback-form').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const text = feedbackText.value.trim();
+  if (!text) return;
+  feedbackSend.disabled = true;
+  feedbackSend.textContent = 'Sending…';
+  try {
+    const res = await fetch('/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, contact: feedbackContact.value.trim() }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    feedbackText.value = '';
+    feedbackText.dispatchEvent(new Event('input'));
+    feedbackThanks.textContent = 'Thank you. It is on the record.';
+    setTimeout(() => feedback.close(), 1400);
+  } catch (err) {
+    showError(err instanceof Error && err.message ? err.message : 'Could not send feedback; try again in a moment');
+    feedback.close();
+  } finally {
+    feedbackSend.disabled = false;
+    feedbackSend.textContent = 'Send';
+  }
+};
+
 $('copy-link').onclick = async () => {
   // In the practice room there is no code to share, so the link is the site itself.
   const url = `${location.origin}${location.pathname}${roomCode ? `?room=${roomCode}` : ''}`;

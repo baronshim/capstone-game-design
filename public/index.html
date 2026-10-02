@@ -134,7 +134,7 @@
       text-transform: uppercase;
       color: var(--muted);
     }
-    input {
+    input, textarea {
       width: 100%;
       margin-top: 7px;
       padding: 13px 14px;
@@ -144,8 +144,8 @@
       border: 1px solid var(--line);
       border-radius: var(--radius-sm);
     }
-    input::placeholder { color: var(--faint); }
-    input:focus-visible {
+    input::placeholder, textarea::placeholder { color: var(--faint); }
+    input:focus-visible, textarea:focus-visible {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-dim);
@@ -544,8 +544,17 @@
     footer { margin-top: 22px; text-align: center; }
     .footnote { color: var(--faint); font-size: 11px; font-family: var(--mono); letter-spacing: .08em; }
 
-    .home-tools { display: flex; gap: 8px; margin-top: 22px; }
-    .home-tools button { flex: 1; }
+    .home-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+    .home-tools button { flex: 1 1 120px; }
+
+    /* ---- feedback ---- */
+    #feedback textarea { min-height: 130px; resize: vertical; line-height: 1.45; }
+    #feedback label.field { text-align: left; }
+    #feedback .count { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: right; margin: -8px 0 12px; }
+    #feedback .actions { display: flex; gap: 8px; }
+    #feedback .actions button { flex: 1; }
+    #feedback .thanks { color: var(--good); font-size: 15px; margin: 0 0 16px; }
+    #feedback .thanks:empty { display: none; }
 
     /* ---- tutorial ---- */
     /* Room for the coach card, so the spotlit control can scroll clear of it. */
@@ -632,6 +641,7 @@
       <div class="home-tools">
         <button id="tutorial" class="btn-ghost">Tutorial</button>
         <button id="help-home" class="btn-ghost">How to play</button>
+        <button id="feedback-home" class="btn-ghost">Feedback</button>
       </div>
     </section>
 
@@ -711,6 +721,25 @@
       </ol>
       <p class="tip"><b>Scoring.</b> Vote for the imposter: 2 points. Imposter survives the vote: 3 points. Imposter is ejected but steals the word: 2 points. Each correct Human or Bot call: 1 point. The highest total wins the round, bots included. Play again keeps your total.</p>
       <form method="dialog"><button class="btn-primary">Got it</button></form>
+    </dialog>
+
+    <dialog id="feedback">
+      <h2>Feedback</h2>
+      <p class="sub">What worked, what dragged, what broke, what you wish it did.</p>
+      <form id="feedback-form">
+        <label class="field">Your feedback
+          <textarea id="feedback-text" name="text" maxlength="2000" required placeholder="The bots gave themselves away when…"></textarea>
+        </label>
+        <div class="count"><span id="feedback-count">0</span> / 2000</div>
+        <label class="field">How to reach you (optional)
+          <input id="feedback-contact" name="contact" maxlength="200" autocomplete="email" placeholder="email or handle">
+        </label>
+        <p id="feedback-thanks" class="thanks" aria-live="polite"></p>
+        <div class="actions">
+          <button type="button" id="feedback-cancel" class="btn-ghost">Cancel</button>
+          <button type="submit" id="feedback-send" class="btn-primary">Send</button>
+        </div>
+      </form>
     </dialog>
 
     <footer><span class="footnote">for the record · what makes the cut?</span></footer>

@@ -91,7 +91,7 @@ describe('makeRunner', () => {
     }
     throw new Error('no seed');
   }
-  const env = (over: Partial<Env>): Env => ({ ROOMS: {} as Env['ROOMS'], ASSETS: {} as Env['ASSETS'], BOT_MODE: 'live', ...over });
+  const env = (over: Partial<Env>): Env => ({ ROOMS: {} as Env['ROOMS'], FEEDBACK: {} as Env['FEEDBACK'], ASSETS: {} as Env['ASSETS'], BOT_MODE: 'live', ...over });
   const turn = { type: 'botTurn' as const, seat: 0, action: 'clue' as const, delayMs: 0 };
 
   it('uses the AI binding and BOT_MODEL in live mode', async () => {

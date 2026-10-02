@@ -28,6 +28,24 @@ reveal, with a coach card explaining each step. It does not open on an
 invite link, since that visitor is on their way into a live room.
 `src/client/tutorial.ts`; `localStorage.tutorialSeen` remembers it.
 
+## Feedback
+
+The Feedback button on the home screen opens a dialog with a text box (2000
+characters) and an optional contact field. `POST /feedback` validates it,
+allows five submissions a minute per address, and appends it to a single
+Durable Object (`FeedbackObject`, SQLite, `src/worker/feedback.ts`).
+
+To read what players sent, set the key once and then fetch with it:
+
+```
+npx wrangler secret put FEEDBACK_KEY --env production
+curl -H "Authorization: Bearer $FEEDBACK_KEY" https://imposter-turing.baronshim.workers.dev/feedback
+```
+
+The response is JSON, newest first, with the text, contact, user agent, and
+a Unix-millisecond timestamp. Until the secret is set, every read returns
+401. Local dev uses the key `dev`.
+
 ## A round (as of the 2026-09-17 playtest pass)
 
 1. **Lobby.** Create a room, share the 4-letter code, press Start with 1 to 6
