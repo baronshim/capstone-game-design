@@ -5,21 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>For the Record — presentation</title>
 <!--
-  Self-contained slide deck. Open in a browser and press F for full screen.
+  Self-contained slide deck. Open in a browser, press F for full screen.
   Keys: → / space / click = next, ← = back, N = speaker notes, Home / End.
-  Print to PDF from the browser (landscape) or see slides.pdf next to this file.
-  Images live in ../media/. Fonts come from Google Fonts when online; system
-  fonts stand in when offline.
+  slides.pdf next to this file is the printed version. Images live in ../media/.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
 <style>
   :root {
-    --bg: #070a13; --bg2: #0d1326; --panel: #111a33; --line: #26304f;
+    --bg: #070a13; --line: #26304f;
     --ink: #f2f0e8; --muted: #b7bccf; --faint: #7d88ad;
     --gold: #e6bb5a; --gold-hi: #fbe39a; --gold-lo: #7a5a1c;
-    --teal: #56e0c8; --rust: #f0845a; --violet: #c08cf5;
     --display: 'Chakra Petch', system-ui, sans-serif;
     --body: 'IBM Plex Sans', system-ui, sans-serif;
     --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
@@ -27,108 +24,61 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--body); }
   body { overflow: hidden; }
-
-  /* Deck is a 1600x900 canvas scaled to the window */
   #deck { position: fixed; inset: 0; display: grid; place-items: center; }
   .slide {
-    position: absolute; width: 1600px; height: 900px; padding: 72px 96px;
+    position: absolute; width: 1600px; height: 900px; padding: 80px 96px;
     display: none; flex-direction: column;
-    background:
-      radial-gradient(1100px 600px at 50% 20%, #12193a 0%, transparent 70%),
-      radial-gradient(700px 500px at 50% 110%, rgba(230,187,90,0.10) 0%, transparent 65%),
-      var(--bg);
+    background: var(--bg);
     transform-origin: center center;
   }
   .slide.active { display: flex; }
-  .slide::before { /* faint stars */
-    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
-    background-image:
-      radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%),
-      radial-gradient(1px 1px at 78% 12%, #fff 50%, transparent 51%),
-      radial-gradient(1.5px 1.5px at 88% 70%, #fff 50%, transparent 51%),
-      radial-gradient(1px 1px at 30% 82%, #fff 50%, transparent 51%),
-      radial-gradient(1px 1px at 55% 40%, #fff 50%, transparent 51%),
-      radial-gradient(1px 1px at 6% 60%, #fff 50%, transparent 51%),
-      radial-gradient(1.5px 1.5px at 65% 88%, #fff 50%, transparent 51%),
-      radial-gradient(1px 1px at 42% 8%, #fff 50%, transparent 51%);
-  }
-  .slide > * { position: relative; }
 
-  .eyebrow { font-family: var(--mono); font-size: 18px; letter-spacing: .32em; text-transform: uppercase; color: var(--gold); margin: 0 0 18px; }
-  h1 { font-family: var(--display); font-weight: 700; text-transform: uppercase; line-height: .92; margin: 0; letter-spacing: .005em;
-       background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 55%, var(--gold-lo) 140%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  h2 { font-family: var(--display); font-weight: 600; font-size: 56px; line-height: 1.05; margin: 0 0 28px; color: var(--ink); }
-  h2 em { font-style: normal; color: var(--gold); }
-  p.lede { font-size: 30px; line-height: 1.35; color: var(--muted); margin: 0; max-width: 1100px; }
-  .foot { position: absolute; left: 96px; right: 96px; bottom: 36px; display: flex; justify-content: space-between; font-family: var(--mono); font-size: 15px; letter-spacing: .14em; color: var(--faint); text-transform: lowercase; }
-  .row { display: flex; gap: 40px; align-items: stretch; flex: 1; min-height: 0; }
+  .tag { font-family: var(--mono); font-size: 18px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin: 0 0 36px; }
+  h1 { font-family: var(--display); font-weight: 700; text-transform: uppercase; line-height: .9; margin: 0; color: var(--gold); }
+  h2 { font-family: var(--display); font-weight: 600; font-size: 68px; line-height: 1.05; margin: 0; color: var(--ink); }
+  .sub { font-size: 30px; line-height: 1.35; color: var(--muted); margin: 24px 0 0; }
+  .url { font-family: var(--mono); font-size: 24px; color: var(--gold); margin: 28px 0 0; }
+
+  .row { display: flex; gap: 72px; align-items: stretch; flex: 1; min-height: 0; }
   .col { display: flex; flex-direction: column; justify-content: center; flex: 1; min-width: 0; }
+  .fill { flex: 1; min-height: 0; }
+  .center { align-items: center; justify-content: center; text-align: center; }
 
-  .shot { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--bg2); box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .shot { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #0d1326; }
   .shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-  .phone { width: 220px; aspect-ratio: 390 / 844; border-radius: 26px; border: 2px solid #2d375a; }
-  .phone img { object-position: top; }
-  .caption { font-family: var(--mono); font-size: 15px; color: var(--faint); letter-spacing: .08em; margin-top: 10px; text-align: center; text-transform: uppercase; }
+  .phone { aspect-ratio: 390 / 760; border-radius: 28px; border: 2px solid #2d375a; }
+  .cap { font-family: var(--mono); font-size: 15px; color: var(--faint); letter-spacing: .1em; margin-top: 14px; text-align: center; text-transform: uppercase; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center; min-width: 0; }
 
-  .strip { display: flex; gap: 22px; justify-content: center; align-items: center; flex: 1; }
-  .strip figure { margin: 0; display: flex; flex-direction: column; align-items: center; }
-  .strip .phone { width: 196px; aspect-ratio: 390 / 760; }
+  .strip { display: flex; gap: 20px; margin: 0 -24px; justify-content: center; align-items: center; flex: 1; }
+  .strip .phone { width: 226px; }
 
-  .quote { font-family: var(--display); font-size: 54px; line-height: 1.12; color: var(--ink); margin: 0; }
-  .quote small { display: block; font-family: var(--mono); font-size: 18px; color: var(--gold); letter-spacing: .2em; text-transform: uppercase; margin-top: 26px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; flex: 1; align-items: start; }
+  .grid4 .shot { height: 540px; }
+  .grid4 img { object-position: center top; }
 
-  .bubbles { display: flex; flex-direction: column; gap: 18px; justify-content: center; flex: 1; max-width: 1180px; margin: 0 auto; }
-  .bubble { align-self: flex-end; max-width: 86%; background: linear-gradient(180deg, #2a2210, #1c1709); border: 1px solid var(--gold-lo); color: var(--gold-hi); border-radius: 22px 22px 6px 22px; padding: 18px 26px; font-family: var(--mono); font-size: 24px; line-height: 1.35; }
-  .bubble.ai { align-self: flex-start; background: var(--panel); border-color: var(--line); color: var(--muted); border-radius: 22px 22px 22px 6px; }
-  .bubble .when { display: block; font-size: 14px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+  .quote { font-family: var(--display); font-size: 60px; line-height: 1.15; color: var(--ink); margin: 0; }
+  .quote small { display: block; font-family: var(--mono); font-size: 18px; color: var(--gold); letter-spacing: .22em; text-transform: uppercase; margin-top: 32px; }
 
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 36px; }
-  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px 30px; }
-  .tile b { display: block; font-family: var(--display); font-size: 64px; color: var(--gold); line-height: 1; }
-  .tile span { font-family: var(--mono); font-size: 16px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .bubbles { display: flex; flex-direction: column; gap: 26px; justify-content: center; flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; }
+  .bubble { align-self: flex-end; max-width: 90%; background: #1f1a0c; border: 1px solid var(--gold-lo); color: var(--gold-hi); border-radius: 24px 24px 6px 24px; padding: 22px 32px; font-family: var(--mono); font-size: 30px; line-height: 1.35; }
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; flex: 1; align-content: center; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 14px; padding: 26px 28px; }
-  .card.teal { border-left-color: var(--teal); } .card.rust { border-left-color: var(--rust); } .card.violet { border-left-color: var(--violet); }
-  .card h3 { font-family: var(--display); font-size: 30px; margin: 0 0 10px; color: var(--ink); }
-  .card p { margin: 0; font-size: 21px; line-height: 1.35; color: var(--muted); }
-  .card .tag { font-family: var(--mono); font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 8px; }
+  .flow { font-family: var(--display); font-size: 58px; color: var(--ink); text-align: center; line-height: 1.3; }
+  .flow i { font-style: normal; color: var(--gold); padding: 0 .35em; }
 
-  .loop { display: flex; align-items: center; gap: 0; justify-content: center; margin: 40px 0 0; }
-  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 28px; text-align: center; min-width: 210px; }
-  .step b { display: block; font-family: var(--display); font-size: 28px; color: var(--gold-hi); }
-  .step span { font-size: 17px; color: var(--muted); }
-  .arrow { width: 44px; height: 2px; background: var(--gold-lo); position: relative; }
-  .arrow::after { content: ""; position: absolute; right: -2px; top: -5px; border: 6px solid transparent; border-left-color: var(--gold); }
+  .list { display: flex; flex-direction: column; gap: 26px; justify-content: center; flex: 1; font-family: var(--display); font-size: 44px; line-height: 1.15; color: var(--ink); }
 
-  .tl-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-  .timeline { position: relative; margin: 0 20px; height: 260px; }
-  .timeline .bar { position: absolute; left: 0; right: 0; top: 60px; height: 3px; background: linear-gradient(90deg, var(--gold-lo), var(--gold), var(--gold-lo)); }
-  .tick { position: absolute; top: 44px; width: 210px; margin-left: -105px; text-align: center; }
-  .tick i { display: block; width: 18px; height: 18px; border-radius: 50%; background: var(--gold); border: 4px solid var(--bg); margin: 0 auto 14px; box-shadow: 0 0 0 2px var(--gold-lo); }
-  .tick b { display: block; font-family: var(--mono); font-size: 15px; letter-spacing: .14em; color: var(--gold); }
-  .tick span { display: block; font-size: 21px; line-height: 1.3; color: var(--muted); margin-top: 8px; }
-  .tick.alt { top: 44px; } .tick.alt i { margin-bottom: 0; } .tick.alt b, .tick.alt span { position: relative; }
-  .tick.alt { transform: translateY(-150px); } .tick.alt i { position: absolute; left: 50%; bottom: -40px; margin-left: -9px; }
-
-  .versions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px; flex: 1; align-items: start; margin-top: 10px; }
-  .versions figure { margin: 0; }
-  .versions .shot { height: 520px; }
-  .versions .shot img { object-position: center top; }
-  .code { font-family: var(--mono); font-size: 22px; line-height: 1.5; background: #050710; border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px; color: var(--muted); white-space: pre; overflow: hidden; }
-  .code .k { color: var(--teal); } .code .bad { color: var(--rust); } .code .ok { color: var(--gold-hi); }
-
-  .record { width: 420px; height: 420px; }
+  .code { font-family: var(--mono); font-size: 30px; line-height: 1.55; background: #050710; border: 1px solid var(--line); border-radius: 14px; padding: 36px 44px; color: var(--muted); white-space: pre; overflow: hidden; margin-top: 44px; }
+  .code b { font-weight: 400; color: var(--gold-hi); }
 
   #hud { position: fixed; right: 18px; bottom: 14px; font-family: var(--mono); font-size: 13px; color: var(--faint); letter-spacing: .12em; z-index: 5; }
   #notes { position: fixed; left: 0; right: 0; bottom: 0; max-height: 38vh; overflow: auto; background: rgba(5,7,16,.96); border-top: 1px solid var(--gold-lo); color: var(--ink); padding: 18px 28px 28px; font-size: 18px; line-height: 1.5; display: none; z-index: 6; }
   #notes.show { display: block; }
   #notes h4 { margin: 0 0 8px; font-family: var(--mono); font-size: 13px; letter-spacing: .2em; color: var(--gold); text-transform: uppercase; }
-  .notes { display: none; }
 
   @media print {
     @page { size: 1600px 900px; margin: 0; }
-    html, body { overflow: visible; background: var(--bg); }
+    html, body { overflow: visible; background: var(--bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #deck { position: static; display: block; }
     .slide { display: flex !important; position: relative; transform: none !important; page-break-after: always; break-after: page; }
     #hud, #notes { display: none !important; }
@@ -138,245 +88,180 @@
 <body>
 <div id="deck">
 
-<!-- 1 Title -->
-<section class="slide" data-notes="Hi, I'm Baron. This is For the Record, a chat game where six voices go on the record, one of them is lying, and some of them are machines. You can scan the poster and play it on your phone right now; I'll leave it up at the end.">
-  <div class="row">
-    <div class="col" style="flex: 0 0 560px; align-items: center;">
-      <div class="shot" style="width: 520px; aspect-ratio: 3/4;"><img src="../media/poster.png" alt="For the Record poster: a golden record with a wedge cut out"></div>
-    </div>
-    <div class="col">
-      <p class="eyebrow">a golden record you play</p>
-      <h1 style="font-size: 190px;">For the<br>Record</h1>
-      <p class="lede" style="margin-top: 34px;">Six voices go on the record. One is lying. Some are machines.</p>
-      <p class="lede" style="margin-top: 26px; font-family: var(--mono); font-size: 22px; color: var(--gold);">imposter-turing.baronshim.workers.dev</p>
-    </div>
-  </div>
-  <div class="foot"><span>honors capstone · unit 1</span><span>baron shimanovsky</span></div>
-</section>
-
-<!-- 2 The book -->
-<section class="slide" data-notes="Where the idea comes from. In See You in the Cosmos, Alex records his life for aliens who will never meet him, and he copies the Voyager Golden Record: a portrait of Earth with the war and the cruelty cut out. The book keeps showing him choosing what goes in. The worst stretch, the hospital, is exactly the part the aliens don't get. So my theme is the curated self versus the actual self: what do we choose to share, and is that a message or a lie?">
+<!-- 1 -->
+<section class="slide" data-notes="Hi, I'm Baron. This is For the Record: six voices go on the record, one is lying, some are machines. The poster QR is live; scan it any time.">
   <div class="row">
     <div class="col" style="flex: 0 0 520px; align-items: center;">
-      <svg class="record" viewBox="0 0 400 400" aria-hidden="true">
-        <defs>
-          <radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#fbe39a"/><stop offset=".55" stop-color="#e6bb5a"/><stop offset="1" stop-color="#7a5a1c"/></radialGradient>
-          <clipPath id="cut"><path d="M200 200 L200 0 L400 0 L400 200 Z"/></clipPath>
-        </defs>
+      <div class="shot" style="width: 500px; aspect-ratio: 3/4;"><img src="../media/poster.png" alt="For the Record poster"></div>
+    </div>
+    <div class="col">
+      <h1 style="font-size: 190px;">For the<br>Record</h1>
+      <p class="url">imposter-turing.baronshim.workers.dev</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-notes="Where the idea comes from. In See You in the Cosmos, Alex records his life for aliens who will never meet him, copying the Voyager Golden Record: a portrait of Earth with the war and the cruelty cut out. The book keeps showing him choosing what goes in. The hospital never makes the record. My theme is the curated self versus the actual self: what do we choose to share, and is that a message or a lie?">
+  <div class="row">
+    <div class="col" style="flex: 0 0 520px; align-items: center;">
+      <svg width="420" height="420" viewBox="0 0 400 400" aria-hidden="true">
+        <defs><radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#fbe39a"/><stop offset=".55" stop-color="#e6bb5a"/><stop offset="1" stop-color="#7a5a1c"/></radialGradient></defs>
         <circle cx="200" cy="200" r="190" fill="url(#g)"/>
-        <g stroke="#7a5a1c" stroke-opacity=".45" fill="none">
-          <circle cx="200" cy="200" r="170"/><circle cx="200" cy="200" r="150"/><circle cx="200" cy="200" r="130"/><circle cx="200" cy="200" r="110"/><circle cx="200" cy="200" r="90"/>
-        </g>
+        <g stroke="#7a5a1c" stroke-opacity=".45" fill="none"><circle cx="200" cy="200" r="170"/><circle cx="200" cy="200" r="150"/><circle cx="200" cy="200" r="130"/><circle cx="200" cy="200" r="110"/><circle cx="200" cy="200" r="90"/></g>
         <path d="M200 200 L200 10 A190 190 0 0 1 334 66 Z" fill="#070a13"/>
         <path d="M200 10 A190 190 0 0 1 334 66" stroke="#e6bb5a" stroke-dasharray="6 8" fill="none" stroke-width="2"/>
         <circle cx="200" cy="200" r="42" fill="#f2f0e8"/><circle cx="200" cy="200" r="6" fill="#070a13"/>
       </svg>
     </div>
     <div class="col">
-      <p class="eyebrow">see you in the cosmos</p>
-      <p class="quote">“A portrait of Earth with the war and cruelty removed.”<small>the curated self vs. the actual self</small></p>
-      <p class="lede" style="margin-top: 40px;">Alex records his life for aliens who can never check it. The hospital never makes the record.</p>
+      <p class="quote">“A portrait of Earth with the war and cruelty removed.”<small>see you in the cosmos</small></p>
     </div>
   </div>
-  <div class="foot"><span>why this idea</span><span>2</span></div>
 </section>
 
-<!-- 3 Why this idea -->
-<section class="slide" data-notes="I started from the party game Imposter, where one player doesn't know the word and has to bluff through clues, and added a Turing test: some seats are AI bots mimicking the humans in the room. Both things are the theme in mechanic form. The imposter performs knowledge it doesn't have. The bots edit themselves to blend in. Everyone is curating a self in a chat for people who can't check. The feeling I was after is that small betrayal at the reveal when you find out who fooled you.">
+<!-- 3 -->
+<section class="slide" data-notes="I started from the party game Imposter, where one player doesn't know the word and bluffs through clues, and added a Turing test: some seats are AI bots mimicking the humans in the room. Both are the theme as a mechanic. The imposter performs knowledge it doesn't have. The bots edit themselves to blend in. Everyone curates a self in a chat for people who can't check. The feeling I wanted is the small betrayal at the reveal.">
   <div class="row">
-    <div class="col">
-      <p class="eyebrow">why this idea</p>
-      <h2>Imposter <em>+</em> Turing test<br><em>=</em> everyone is performing</h2>
-      <p class="lede">The imposter performs a word it doesn’t know.<br>The bots edit themselves to pass as human.<br>You decide what to share, in public, for people who can’t check.</p>
-      <p class="lede" style="margin-top: 34px; color: var(--gold);">Goal feeling: the betrayal at the reveal.</p>
+    <div class="col" style="flex: 0 0 520px;">
+      <h2>Imposter<br>+ Turing test</h2>
+      <p class="sub">Everyone is performing.</p>
     </div>
-    <div class="col" style="flex: 0 0 720px;">
-      <div class="shot" style="height: 720px;"><img src="../media/chat.png" alt="The chat phase: six call signs, their clues, and an open transcript"></div>
+    <div class="col">
+      <div class="shot fill"><img src="../media/chat.png" alt="The chat phase"></div>
     </div>
   </div>
-  <div class="foot"><span>for the record</span><span>3</span></div>
 </section>
 
-<!-- 4 A round -->
-<section class="slide" data-notes="A round in a minute. Create a room, share a four-letter code; empty seats fill with bots. Six seconds to read your card. Two passes of one-word clues, thirty seconds each. A hundred and fifty seconds of open chat where the bots argue too. A vote. If the imposter is ejected it gets one guess at the word. Then every human marks every seat human or bot. Then the reveal.">
-  <p class="eyebrow">one round</p>
+<!-- 4 -->
+<section class="slide" data-notes="A round in a minute. Share a four-letter code; empty seats fill with bots. Six seconds to read your card. Two passes of one-word clues. A hundred and fifty seconds of open chat where the bots argue too. A vote; an ejected imposter gets one guess at the word. Everyone marks every seat human or bot. Then the reveal.">
+  <p class="tag">one round</p>
   <div class="strip">
-    <figure><div class="shot phone"><img src="../media/lobby-phone.png" alt=""></div><figcaption class="caption">lobby</figcaption></figure>
-    <figure><div class="shot phone"><img src="../media/deal-phone.png" alt=""></div><figcaption class="caption">deal · 6s</figcaption></figure>
-    <figure><div class="shot phone"><img src="../media/clue-phone.png" alt=""></div><figcaption class="caption">clues · 2 passes</figcaption></figure>
-    <figure><div class="shot phone"><img src="../media/chat-phone.png" alt=""></div><figcaption class="caption">chat · 150s</figcaption></figure>
-    <figure><div class="shot phone"><img src="../media/vote-phone.png" alt=""></div><figcaption class="caption">vote</figcaption></figure>
-    <figure><div class="shot phone"><img src="../media/botcall-phone.png" alt=""></div><figcaption class="caption">human or bot?</figcaption></figure>
-    <figure><div class="shot phone"><img src="../media/reveal-phone.png" alt=""></div><figcaption class="caption">reveal</figcaption></figure>
+    <figure><div class="shot phone"><img src="../media/deal-phone.png" alt=""></div><figcaption class="cap">deal</figcaption></figure>
+    <figure><div class="shot phone"><img src="../media/clue-phone.png" alt=""></div><figcaption class="cap">clues</figcaption></figure>
+    <figure><div class="shot phone"><img src="../media/chat-phone.png" alt=""></div><figcaption class="cap">chat</figcaption></figure>
+    <figure><div class="shot phone"><img src="../media/vote-phone.png" alt=""></div><figcaption class="cap">vote</figcaption></figure>
+    <figure><div class="shot phone"><img src="../media/botcall-phone.png" alt=""></div><figcaption class="cap">human or bot?</figcaption></figure>
+    <figure><div class="shot phone"><img src="../media/reveal-phone.png" alt=""></div><figcaption class="cap">reveal</figcaption></figure>
   </div>
-  <div class="foot"><span>six seats · 1 to 6 humans · bots fill the rest</span><span>4</span></div>
 </section>
 
-<!-- 5 The reveal -->
-<section class="slide" data-notes="The reveal is the uncurated record. Who was human, who was a machine, who was the imposter, who voted for whom, and the word. Every seat scores, bots included, so there is always a winner, and the betrayal is right there on the screen.">
+<!-- 5 -->
+<section class="slide" data-notes="The reveal is the uncurated record: who was human, who was a machine, who was lying, who voted for whom. Every seat scores, bots included, so there is always a winner, and the betrayal is right there on the screen.">
   <div class="row">
-    <div class="col" style="flex: 0 0 760px;">
-      <div class="shot" style="height: 740px;"><img src="../media/reveal.png" alt="The reveal: every seat named, the winner, the imposter result, the scoreboard"></div>
+    <div class="col" style="flex: 0 0 780px;">
+      <div class="shot fill"><img src="../media/reveal-scoreboard.png" alt="The reveal with the scoreboard"></div>
     </div>
     <div class="col">
-      <p class="eyebrow">the reveal</p>
-      <h2>The <em>uncurated</em> record</h2>
-      <p class="lede">Who was human. Who was a machine. Who was lying. Who you voted for.</p>
-      <p class="lede" style="margin-top: 30px;">Everyone scores, bots included. Someone always wins, and it is often not who you thought.</p>
+      <h2>The uncurated record</h2>
     </div>
   </div>
-  <div class="foot"><span>theme in the mechanic</span><span>5</span></div>
 </section>
 
-<!-- 6 Process -->
-<section class="slide" data-notes="How I built it. Plan, setup, build, as the unit asked. I wrote the spec with Claude in a question and answer session, then every milestone got a written plan with one task per piece. Each task: write the failing test, make it pass, commit, review. At the end of each milestone a stronger model reviewed the whole branch, then I deployed and played it live, and what we learned went back into the spec and the notes. Eleven working days, eighty-two commits, two hundred and thirteen tests that run inside the real Cloudflare runtime.">
-  <p class="eyebrow">process</p>
-  <h2>Spec <em>→</em> plan <em>→</em> one piece at a time <em>→</em> play it live</h2>
-  <div class="loop">
-    <div class="step"><b>Spec</b><span>questions, options, a doc</span></div><div class="arrow"></div>
-    <div class="step"><b>Plan</b><span>one task per piece</span></div><div class="arrow"></div>
-    <div class="step"><b>Test first</b><span>then make it pass</span></div><div class="arrow"></div>
-    <div class="step"><b>Review</b><span>per task, then the branch</span></div><div class="arrow"></div>
-    <div class="step"><b>Play live</b><span>then update the spec</span></div>
+<!-- 6 -->
+<section class="slide" data-notes="How I built it: plan, setup, build. I wrote the spec with Claude in a question and answer session, then every milestone got a written plan with one task per piece. Each task: failing test first, make it pass, commit, review. A stronger model reviewed each whole milestone, then I deployed and played it live, and what we learned went back into the spec. Eleven working days, eighty-two commits, two hundred and thirteen tests that run inside the real Cloudflare runtime.">
+  <div class="col center">
+    <p class="flow">Spec<i>→</i>Plan<i>→</i>Test first<i>→</i>Review<i>→</i>Play live</p>
+    <p class="sub" style="margin-top: 48px;">82 commits in 11 days</p>
   </div>
-  <div class="tiles">
-    <div class="tile"><b>82</b><span>commits · 11 working days</span></div>
-    <div class="tile"><b>213</b><span>tests, run in the real runtime</span></div>
-    <div class="tile"><b>3</b><span>milestones · 1 dropped on purpose</span></div>
-  </div>
-  <div class="foot"><span>claude code · cloudflare workers · typescript</span><span>6</span></div>
 </section>
 
-<!-- 7 Prompts -->
-<section class="slide" data-notes="These are real prompts from my transcripts, typos included. Most of my prompts are short because the AI asked the questions and I made the calls. 'Lets do C with an unknown amount of bots' is how the game got its six seats where nobody knows how many are human. 'Forget the whole knights and knaves' is the biggest pivot. 'Bots should have their own thinking' is me rejecting a design the AI proposed. And 'way too much text' is the poster.">
-  <p class="eyebrow">my prompts, verbatim</p>
+<!-- 7 -->
+<section class="slide" data-notes="Real prompts from my transcripts, typos included. Mine are short because the AI asked the questions and I made the calls. 'Lets do C with an unknown amount of bots' is how the game got six seats where nobody knows how many are human. 'Forget the whole knights and knaves' is the biggest pivot. 'Bots should have their own thinking' is me rejecting a design the AI proposed. 'Way too much text' is the poster.">
+  <p class="tag">my prompts, verbatim</p>
   <div class="bubbles">
-    <div class="bubble"><span class="when">sep 4 · design session</span>lets do C with an unkown amount of bots</div>
-    <div class="bubble"><span class="when">sep 15 · after playing the live build</span>forget the whole knights and knaves lets keep the game as is and start doing testing and feedback</div>
-    <div class="bubble"><span class="when">sep 16 · rejecting a proposed design</span>the bots should have their own thinking and be open to being convinced (not given a random suspect they have to commit too)</div>
-    <div class="bubble"><span class="when">sep 28 · art direction</span>way too much text. make it simpler. the qr code should be centered</div>
+    <div class="bubble">lets do C with an unkown amount of bots</div>
+    <div class="bubble">forget the whole knights and knaves lets keep the game as is and start doing testing and feedback</div>
+    <div class="bubble">the bots should have their own thinking and be open to being convinced</div>
+    <div class="bubble">way too much text. make it simpler.</div>
   </div>
-  <div class="foot"><span>73 prompts · 16 sessions · the full log is in the write-up</span><span>7</span></div>
 </section>
 
-<!-- 8 Interim versions -->
-<section class="slide" data-notes="Interim versions. Day five, a chat room with animal names and no styling at all: that was the MVP. Day eleven, the imposter round with clues, vote, steal and reveal, and the same night, bots on Workers AI, live on the web, with the first real look, a teal transmission console. Then two playtest passes, the rename and gold restyle to match the poster, the tutorial, and the feedback button. The game was playable by classmates from day eleven on, which gave me two weeks of real feedback.">
-  <p class="eyebrow">interim versions</p>
-  <h2>Playable from day 5, <em>live</em> from day 11</h2>
-  <div class="versions">
-    <figure><div class="shot"><img src="../media/m1-chat.png" alt="M1: an unstyled chat room with six animal aliases"></div><figcaption class="caption">sep 9 · m1 · chat room</figcaption></figure>
-    <figure><div class="shot"><img src="../media/m2-reveal.png" alt="M2: the first reveal, a plain table of aliases and votes"></div><figcaption class="caption">sep 15 · m2 · imposter round</figcaption></figure>
-    <figure><div class="shot"><img src="../media/console-chat.png" alt="M3: the teal transmission console with bot seats"></div><figcaption class="caption">sep 15 · m3 · bots, console look</figcaption></figure>
-    <figure><div class="shot"><img src="../media/chat.png" alt="Now: the gold For the Record interface"></div><figcaption class="caption">sep 28 → oct 2 · for the record</figcaption></figure>
+<!-- 8 -->
+<section class="slide" data-notes="Interim versions. Day five, a chat room with animal names and no styling: the MVP. Day eleven, the imposter round, and the same night, bots on Workers AI, live on the web, with the first real look, a teal transmission console. Then two playtest passes, the rename and gold restyle to match the poster, the tutorial, and the feedback button. Classmates could play from day eleven on, which gave me two weeks of real feedback.">
+  <p class="tag">interim versions</p>
+  <div class="grid4">
+    <figure><div class="shot"><img src="../media/m1-chat.png" alt="M1"></div><figcaption class="cap">sep 9</figcaption></figure>
+    <figure><div class="shot"><img src="../media/m2-reveal.png" alt="M2"></div><figcaption class="cap">sep 15</figcaption></figure>
+    <figure><div class="shot"><img src="../media/console-chat.png" alt="M3"></div><figcaption class="cap">sep 15 · bots live</figcaption></figure>
+    <figure><div class="shot"><img src="../media/chat.png" alt="Now"></div><figcaption class="cap">sep 28</figcaption></figure>
   </div>
-  <div class="foot"><span>then: playtest passes sep 22 and 24 · poster sep 28 · tutorial sep 30 · feedback oct 2</span><span>8</span></div>
 </section>
 
-<!-- 9 Where it worked -->
-<section class="slide" data-notes="Where the process worked. Playtest one gave me six bullet points: too fast, needs cues, bots too quick, too quiet, too flat. I pasted them in. The AI traced each one to a cause in the code, proposed the fix, and I said go. A day later: a deal phase, longer timers, banners, a progress bar, typing indicators for every seat so the indicator isn't itself a tell, synthesized sound, and bots that wait, type at human speed, and talk more. The other big win was the whole-branch review at the end of milestone two, which found four real bugs the per-task reviews missed, including an error message that leaked the secret word.">
+<!-- 9 -->
+<section class="slide" data-notes="Where the process worked. Playtest one gave me six bullet points: too fast, needs cues, bots too quick, too quiet, too flat. I pasted them in. The AI traced each to a cause in the code, proposed the fix, I said go. A day later: a deal phase, longer timers, phase banners, a progress bar, typing indicators for every seat so the indicator isn't itself a tell, synthesized sound, and bots that wait, type at human speed, and talk more. The other big win: the whole-branch review at the end of milestone two found four real bugs the per-task reviews missed, including an error message that leaked the secret word.">
   <div class="row">
-    <div class="col">
-      <p class="eyebrow">where it worked</p>
-      <h2>Six bullet points <em>→</em> a pacing pass in a day</h2>
-      <div class="code"><span class="k">playtest #1</span>
-pacing is too fast
-add visual cues … and potentially audio
-AI sent a message too fast
-AI typed clue too fast
-AI spoke too little
-AI stood out … “boring” language
-
-<span class="ok">→ deal phase, 150s chat, banners, progress bar,
-  typing indicators, sound, bots wait 6–16s,
-  type at 55 ms/char, up to 7 lines each</span></div>
+    <div class="col" style="flex: 0 0 520px;">
+      <h2>Six notes in.<br>One day later.</h2>
     </div>
-    <div class="col" style="flex: 0 0 640px;">
-      <div class="shot" style="height: 700px;"><img src="../media/deal.png" alt="The deal phase: the word card and a countdown before the first clue"></div>
-    </div>
+    <div class="col"><div class="shot fill"><img src="../media/clue-2.png" alt="Your-turn banner and typing indicators"></div></div>
   </div>
-  <div class="foot"><span>also: the end-of-milestone review found 4 bugs the task reviews missed</span><span>9</span></div>
 </section>
 
-<!-- 10 Where it didn't -->
-<section class="slide" data-notes="Where it was less helpful. First, the thinking-mode bug: the first live deploy had silent bots. Every test passed, every review passed. The model on Cloudflare defaults to a thinking mode that spent the whole token budget on reasoning and returned an empty answer, so every bot quietly fell back to a script. Only logging the raw response in production found it. Second, a red herring: timers fired minutes late in local dev, the AI 'fixed' it and made it worse; the real deploy was fine all along. Third, a design I had to reject: to stop bots voting as a bloc, the AI proposed dealing each bot a random suspect. That's a fake opinion. I made it form its own read from the clues and stay open to being convinced.">
-  <div class="row">
-    <div class="col">
-      <p class="eyebrow">where it was less helpful</p>
-      <h2>Green tests, <em>silent bots</em></h2>
-      <div class="code"><span class="k">first live round, raw model reply</span>
-{ "reasoning_content": "The clue should…",
-  "content": <span class="bad">""</span>,
-  "finish_reason": <span class="bad">"length"</span> }
+<!-- 10 -->
+<section class="slide" data-notes="Where it was less helpful. The first live deploy had silent bots with every test green: the model defaults to a thinking mode that spent the whole token budget on reasoning and returned an empty answer, so every bot quietly fell back to a script. Only logging the raw reply in production found it. Second, a red herring: local timers fired late, the AI's fix made it worse, production was fine all along. Third, a design I rejected: to stop bots voting as a bloc, the AI proposed dealing each bot a random suspect. A fake opinion. I made them form their own read and stay open to being convinced.">
+  <div class="col center">
+    <h2>Green tests, silent bots</h2>
+    <div class="code" style="text-align: left;">{ "reasoning_content": "The clue…",
+  "content": <b>""</b>,
+  "finish_reason": <b>"length"</b> }</div>
+  </div>
+</section>
 
-<span class="ok">→ enable_thinking: false</span></div>
-    </div>
+<!-- 11 -->
+<section class="slide" data-notes="Game day feedback in the players' words. Names blend together: add icons and sharper call signs. Some screens scroll on a phone. Bots open with your name too often and only send one line. Anyone can press start, not just the host. And the chat is too long now: playtest one said too fast, I went from ninety to a hundred and fifty seconds, game day says too long. The answer is in between.">
+  <div class="row">
+    <div class="col" style="flex: 0 0 640px;"><div class="shot fill"><img src="../media/vote.png" alt="The vote screen"></div></div>
     <div class="col">
-      <div class="cards">
-        <div class="card rust"><span class="tag">only found live</span><h3>Thinking mode</h3><p>Every test passed. Every bot fell back to a script. No review could see it.</p></div>
-        <div class="card violet"><span class="tag">red herring</span><h3>Late timers</h3><p>Local dev fired alarms minutes late. The “fix” made it worse. Production was fine all along.</p></div>
-        <div class="card teal"><span class="tag">I said no</span><h3>Dealt suspects</h3><p>Proposed: give each bot a random target. Shipped: bots form their own read and can be convinced.</p></div>
+      <p class="tag">game day feedback</p>
+      <div class="list">
+        <div>Names blend together</div>
+        <div>Screens scroll on a phone</div>
+        <div>Bots keep saying your name</div>
+        <div>Anyone can press start</div>
+        <div>Chat runs too long</div>
       </div>
     </div>
   </div>
-  <div class="foot"><span>the human in the loop</span><span>10</span></div>
 </section>
 
-<!-- 11 Game jam feedback -->
-<section class="slide" data-notes="Game day feedback, in the players' words. Names blend together, so add icons and make the call signs more different. Some screens scroll on a phone. The bots open with your name too often, and they only ever send one line, which humans don't. Anyone can press start, not just the host. And the open chat is too long now. That last one is funny: playtest one said too fast, so I went from ninety seconds to a hundred and fifty, and game day says too long. The answer is in between.">
-  <p class="eyebrow">game jam feedback</p>
-  <div class="cards">
-    <div class="card"><span class="tag">identity</span><h3>Names blend</h3><p>Add player icons and make call signs more distinguishable.</p></div>
-    <div class="card teal"><span class="tag">layout</span><h3>Have to scroll</h3><p>Spacing on phones; make it responsive.</p></div>
-    <div class="card violet"><span class="tag">bots</span><h3>Name-first, one line</h3><p>Bots start sentences with a player’s name and only send one message at a time.</p></div>
-    <div class="card rust"><span class="tag">rules</span><h3>Anyone can start</h3><p>Start should belong to the host.</p></div>
-    <div class="card"><span class="tag">pacing</span><h3>Chat too long</h3><p>Playtest #1 said too fast. Game day says too long. 150s is past the sweet spot.</p></div>
+<!-- 12 -->
+<section class="slide" data-notes="With two more weeks. Icons and sharper names first, because the vote and the bot call depend on remembering who said what. Chat to about two minutes, no name-first lines, short two-line bursts. A responsive pass and host-only start. And the stretch I wanted from the beginning: an annotated replay at the reveal, the transcript marked with which human each bot was copying. The record, and what was cut.">
+  <div class="row">
+    <div class="col">
+      <p class="tag">next two weeks</p>
+      <div class="list">
+        <div>Icons and sharper names</div>
+        <div>Shorter chat, shorter bot lines</div>
+        <div>Phone layout, host-only start</div>
+        <div>Stretch: the annotated replay</div>
+      </div>
+    </div>
+    <div class="col" style="flex: 0 0 640px;"><div class="shot fill"><img src="../media/reveal-top.png" alt="The reveal"></div></div>
   </div>
-  <div class="foot"><span>oct 2 · classroom</span><span>11</span></div>
 </section>
 
-<!-- 12 Next steps -->
-<section class="slide" data-notes="If I had two more weeks. First, icons and sharper names, because the vote and the bot call both depend on remembering who said what. Second, the chat to about two minutes, and fix the bot prompt so lines don't open with a name and bots can send a quick two-line burst like people do. Third, a responsive pass and host-only start. And the stretch I wanted from the start: an annotated replay at the reveal, the transcript marked up with which human each bot was mimicking. That is the strongest version of the theme: here is the record, and here is what was cut.">
-  <p class="eyebrow">next two weeks</p>
-  <div class="cards">
-    <div class="card"><span class="tag">week 1</span><h3>Icons + sharper call signs</h3><p>An icon on every line, vote button and reveal row. No two seats share a colour family.</p></div>
-    <div class="card teal"><span class="tag">week 1</span><h3>Chat to ~120s, bot bursts</h3><p>No name-first lines. Let a bot send a short two-line burst, the way people do.</p></div>
-    <div class="card violet"><span class="tag">week 2</span><h3>Responsive + host-only start</h3><p>Nothing scrolls on a phone. Start is the host’s button.</p></div>
-    <div class="card rust"><span class="tag">week 2 · stretch</span><h3>The annotated replay</h3><p>At the reveal, the transcript marked with which human each bot was copying. The record, and what was cut.</p></div>
-  </div>
-  <div class="foot"><span>what would make the cut</span><span>12</span></div>
-</section>
-
-<!-- 13 Close -->
+<!-- 13 -->
 <section class="slide" data-notes="That's For the Record. Scan the poster or type the address; it works on a phone, the tutorial walks you through a practice round, and the bots are live. Thank you.">
   <div class="row">
     <div class="col">
-      <p class="eyebrow">play it</p>
       <h1 style="font-size: 150px;">What makes<br>the cut?</h1>
-      <p class="lede" style="margin-top: 34px; font-family: var(--mono); font-size: 26px; color: var(--gold);">imposter-turing.baronshim.workers.dev</p>
-      <p class="lede" style="margin-top: 18px;">Phone, no account. The tutorial plays first.</p>
+      <p class="url">imposter-turing.baronshim.workers.dev</p>
     </div>
-    <div class="col" style="flex: 0 0 560px; align-items: center;">
-      <div class="shot phone" style="width: 330px;"><img src="../media/home-phone.png" alt="The home screen on a phone"></div>
+    <div class="col" style="flex: 0 0 520px; align-items: center;">
+      <div class="shot phone" style="width: 340px;"><img src="../media/home-phone.png" alt="Home screen"></div>
     </div>
   </div>
-  <div class="foot"><span>for the record · baron shimanovsky</span><span>thank you</span></div>
 </section>
 
 </div>
 <div id="hud"></div>
 <div id="notes"><h4>speaker notes · N to hide</h4><div id="notes-body"></div></div>
-
 <script>
   const slides = [...document.querySelectorAll('.slide')];
-  const hud = document.getElementById('hud');
-  const notes = document.getElementById('notes');
-  const notesBody = document.getElementById('notes-body');
+  const hud = document.getElementById('hud'), notes = document.getElementById('notes'), notesBody = document.getElementById('notes-body');
   let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1), 10) || 1) - 1));
-
-  function fit() {
-    const s = Math.min(innerWidth / 1600, innerHeight / 900);
-    for (const el of slides) el.style.transform = `scale(${s})`;
-  }
+  function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); for (const el of slides) el.style.transform = `scale(${s})`; }
   function show(n) {
     i = (n + slides.length) % slides.length;
     slides.forEach((el, k) => el.classList.toggle('active', k === i));
@@ -388,8 +273,7 @@ AI stood out … “boring” language
   addEventListener('keydown', e => {
     if (['ArrowRight', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); show(i + 1); }
     else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(i - 1); }
-    else if (e.key === 'Home') show(0);
-    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'Home') show(0); else if (e.key === 'End') show(slides.length - 1);
     else if (e.key.toLowerCase() === 'n') notes.classList.toggle('show');
     else if (e.key.toLowerCase() === 'f') document.documentElement.requestFullscreen?.();
   });
