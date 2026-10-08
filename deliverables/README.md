@@ -24,21 +24,6 @@ presentation.
 | No-AI written reflection (4%) | [reflection.md](reflection.md) — written by me, no AI |
 | Presentation (5 to 10 min) | [presentation/slides.pdf](presentation/slides.pdf) (viewable here), [presentation/slides.html](presentation/slides.html) (download and open in a browser; F = full screen, N = notes), [presentation/speaker-notes.md](presentation/speaker-notes.md) |
 
-## Still to do by hand
-
-1. ~~Write [reflection.md](reflection.md)~~ done.
-3. Read [build-writeup.md](build-writeup.md), [feedback-triage.md](feedback-triage.md) and the speaker notes once
-   and change anything that is not in my own voice; they were drafted by
-   Claude from the repo and transcripts (logged in [ai-use-log.md](ai-use-log.md)).
-4. Rehearse the deck once with the notes on (press N); it runs about eight
-   minutes.
-5. Optional: the chat screenshots in [media/](media/) and on slides 3 and 8 were
-   taken against the local dev server, whose fake bots only say "beep".
-   Claude could not play a round on the live site without approval (it
-   spends the daily AI budget). To swap in real bot banter, ask Claude to
-   capture one live round, or screenshot a round yourself and replace
-   [media/chat.png](media/chat.png) and [media/chat-phone.png](media/chat-phone.png).
-
 ## Honesty note
 
 Everything in this folder except [reflection.md](reflection.md) was drafted with Claude Code on 2026-10-06 from
